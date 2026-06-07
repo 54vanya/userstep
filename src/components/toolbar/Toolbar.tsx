@@ -1,0 +1,140 @@
+import { useEditorStore } from '@/store/editorStore'
+import { useTabsStore } from '@/store/tabsStore'
+import { parseUcs } from '@/services/ucsParser'
+import { serializeToUcs } from '@/services/ucsSerializer'
+import { useAudio } from '@/hooks/useAudio'
+
+export function Toolbar() {
+  const { scale, setScale } = useEditorStore()
+  const { tabs, activeTabId, addTab } = useTabsStore()
+  const { openAudio, audioFileName } = useAudio()
+
+  const activeTab = tabs.find(t => t.id === activeTabId)
+
+  const handleImportUcs = () => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.ucs'
+    input.onchange = () => {
+      const file = input.files?.[0]
+      if (!file) return
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const text = e.target?.result as string
+        try {
+          const chart = parseUcs(text)
+          chart.meta.title = file.name.replace('.ucs', '')
+          addTab(chart, file.name.replace('.ucs', ''))
+        } catch {
+          alert('Failed to parse UCS file')
+        }
+      }
+      reader.readAsText(file)
+    }
+    input.click()
+  }
+
+  const handleExportUcs = () => {
+    if (!activeTab) return
+    const ucs = serializeToUcs(activeTab.chart)
+    const blob = new Blob([ucs], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${activeTab.label}.ucs`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleSavePiu = () => {
+    if (!activeTab) return
+    const json = JSON.stringify(activeTab.chart, null, 2)
+    const blob = new Blob([json], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${activeTab.label}.piu.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleLoadPiu = () => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.json,.piu.json'
+    input.onchange = () => {
+      const file = input.files?.[0]
+      if (!file) return
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        try {
+          const chart = JSON.parse(e.target?.result as string)
+          addTab(chart, chart.meta?.title || file.name.replace(/\.piu\.json$|\.json$/, ''))
+        } catch {
+          alert('Failed to parse .piu.json file')
+        }
+      }
+      reader.readAsText(file)
+    }
+    input.click()
+  }
+
+  return (
+    <div className="flex items-center gap-3 px-3 h-10 border-b border-border bg-card shrink-0 text-sm">
+      <div className="flex items-center gap-2">
+        <span className="text-muted-foreground text-xs">Scale</span>
+        <input
+          type="range"
+          min={1}
+          max={10}
+          step={0.1}
+          value={scale}
+          onChange={e => setScale(parseFloat(e.target.value))}
+          className="w-24 accent-primary"
+        />
+        <span className="text-xs text-muted-foreground w-8">{scale.toFixed(1)}</span>
+      </div>
+
+      <div className="ml-auto flex items-center gap-2">
+        <button
+          onClick={handleImportUcs}
+          className="px-2 py-0.5 rounded bg-secondary text-secondary-foreground text-xs hover:bg-accent transition-colors"
+        >
+          Import .ucs
+        </button>
+        <button
+          onClick={handleLoadPiu}
+          className="px-2 py-0.5 rounded bg-secondary text-secondary-foreground text-xs hover:bg-accent transition-colors"
+        >
+          Open .piu.json
+        </button>
+        <div className="w-px h-5 bg-border" />
+        <button
+          onClick={handleExportUcs}
+          disabled={!activeTab}
+          className="px-2 py-0.5 rounded bg-secondary text-secondary-foreground text-xs hover:opacity-90 transition-opacity disabled:opacity-40"
+        >
+          Export .ucs
+        </button>
+        <button
+          onClick={handleSavePiu}
+          disabled={!activeTab}
+          className="px-2 py-0.5 rounded bg-primary text-primary-foreground text-xs hover:opacity-90 transition-opacity disabled:opacity-40"
+        >
+          Save .piu.json
+        </button>
+        {activeTab && (
+          <>
+            <div className="w-px h-5 bg-border" />
+            <button
+              onClick={openAudio}
+              className="px-2 py-0.5 rounded bg-secondary text-secondary-foreground text-xs hover:bg-accent transition-colors"
+            >
+              {audioFileName ? audioFileName : 'Open Audio'}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
