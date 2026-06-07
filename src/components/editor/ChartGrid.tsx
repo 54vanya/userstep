@@ -4,6 +4,7 @@ import { useEditorStore } from '@/store/editorStore'
 import {
   rowHeight,
   blockPixelHeight,
+  blockRowCount,
   BLOCK_DIVIDER_HEIGHT,
   COLUMN_WIDTH,
 } from '@/utils/geometry'
@@ -74,7 +75,7 @@ export function ChartGrid() {
     let y = 0
     return activeTab.chart.blocks.map(block => {
       const rh = rowHeight(scale, block.split)
-      const totalRows = block.beat * block.split * block.measures
+      const totalRows = blockRowCount(block)
       const bh = blockPixelHeight(block, scale)
       const layout: BlockLayout = { block, startY: y, endY: y + bh, rh, totalRows }
       y += bh + BLOCK_DIVIDER_HEIGHT

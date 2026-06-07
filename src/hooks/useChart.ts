@@ -88,7 +88,7 @@ export function useChart() {
     if (!chart || !activeTabId) return
     const blocks = chart.blocks.map(b => {
       if (b.id !== blockId) return b
-      const updated = { ...b, ...patch }
+      const updated = { ...b, ...patch, rowCount: undefined }
       const totalRows = updated.beat * updated.split * updated.measures
       const notes = updated.notes
         .map(n =>

@@ -16,8 +16,12 @@ export function rowHeight(scale: number, split: number): number {
   return (BASE_BEAT_HEIGHT * scale) / split
 }
 
+export function blockRowCount(block: Block): number {
+  return block.rowCount ?? (block.beat * block.split * block.measures)
+}
+
 export function blockPixelHeight(block: Block, scale: number): number {
-  return block.beat * block.split * block.measures * rowHeight(scale, block.split)
+  return blockRowCount(block) * rowHeight(scale, block.split)
 }
 
 export function pixelToRow(py: number, scale: number, split: number): number {

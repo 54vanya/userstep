@@ -16,6 +16,8 @@ export interface Block {
   split: number
   measures: number
   notes: Note[]
+  /** Actual row count when it differs from beat*split*measures (e.g. UCS import with non-integer measures) */
+  rowCount?: number
 }
 
 export interface Chart {

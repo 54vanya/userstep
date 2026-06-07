@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { temporal } from 'zundo'
 import { v4 as uuidv4 } from 'uuid'
 import type { Chart, Tab } from '@/types/chart'
+import { saveSession, loadSession } from '@/services/sessionStorage'
 
 function makeEmptyChart(): Chart {
   return {
@@ -43,11 +44,13 @@ interface TabsState {
   setAudioBlob: (tabId: string, blob: Blob, fileName: string) => void
 }
 
+const _stored = loadSession()
+
 export const useTabsStore = create<TabsState>()(
   temporal(
     (set) => ({
-      tabs: [],
-      activeTabId: null,
+      tabs: _stored?.tabs ?? [],
+      activeTabId: _stored?.activeTabId ?? null,
 
       addTab: (chart, label) => {
         const newChart = chart ?? makeEmptyChart()
@@ -125,3 +128,9 @@ export const useTabsStore = create<TabsState>()(
     }
   )
 )
+
+let _saveTimer: ReturnType<typeof setTimeout> | undefined
+useTabsStore.subscribe(state => {
+  clearTimeout(_saveTimer)
+  _saveTimer = setTimeout(() => saveSession(state.tabs, state.activeTabId), 500)
+})

@@ -1,12 +1,13 @@
 import type { Block, BlockOffset } from '@/types/chart'
 import type { BlockLayout } from './geometry'
+import { blockRowCount } from './geometry'
 
 export function computeBlockOffsets(blocks: Block[]): BlockOffset[] {
   let timeMs = 0
   return blocks.map(b => {
     const startMs = timeMs + b.delay
     const msPerRow = (60000 / b.bpm) / b.split
-    const totalRows = b.beat * b.split * b.measures
+    const totalRows = blockRowCount(b)
     timeMs = startMs + totalRows * msPerRow
     return { blockId: b.id, startMs, msPerRow }
   })

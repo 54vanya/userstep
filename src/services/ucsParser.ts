@@ -101,6 +101,7 @@ export function parseUcs(text: string): Chart {
 
   const blocks: Block[] = rawBlocks.map(rb => {
     const measures = Math.max(1, Math.round(rb.rows.length / (rb.beat * rb.split)))
+    const expectedRows = rb.beat * rb.split * measures
     return {
       id: uuidv4(),
       bpm: rb.bpm,
@@ -108,6 +109,7 @@ export function parseUcs(text: string): Chart {
       beat: rb.beat,
       split: rb.split,
       measures,
+      rowCount: rb.rows.length !== expectedRows ? rb.rows.length : undefined,
       notes: rowsToNotes(rb.rows),
     }
   })
