@@ -1,11 +1,12 @@
 import { useEditorStore } from '@/store/editorStore'
+import { audioEngine } from '@/services/audioEngine'
 import { useTabsStore } from '@/store/tabsStore'
 import { parseUcs } from '@/services/ucsParser'
 import { serializeToUcs } from '@/services/ucsSerializer'
 import { useAudio } from '@/hooks/useAudio'
 
 export function Toolbar() {
-  const { scale, setScale } = useEditorStore()
+  const { scale, setScale, playbackRate, setPlaybackRate } = useEditorStore()
   const { tabs, activeTabId, addTab } = useTabsStore()
   const { openAudio, audioFileName } = useAudio()
 
@@ -93,6 +94,24 @@ export function Toolbar() {
           className="w-24 accent-primary"
         />
         <span className="text-xs text-muted-foreground w-8">{scale.toFixed(1)}</span>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <span className="text-muted-foreground text-xs">Speed</span>
+        <input
+          type="range"
+          min={0.5}
+          max={1.5}
+          step={0.1}
+          value={playbackRate}
+          onChange={e => {
+            const rate = parseFloat(e.target.value)
+            setPlaybackRate(rate)
+            audioEngine.setPlaybackRate(rate)
+          }}
+          className="w-20 accent-primary"
+        />
+        <span className="text-xs text-muted-foreground w-6">×{playbackRate.toFixed(1)}</span>
       </div>
 
       <div className="ml-auto flex items-center gap-2">

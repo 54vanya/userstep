@@ -56,6 +56,16 @@
     --grid-measure: 0 0% 43%;
   }
 
+  .grid-cell-hover {
+    background-color: rgba(255, 255, 255, 0.30);
+  }
+
+  @media (prefers-color-scheme: light) {
+    .grid-cell-hover {
+      background-color: rgba(0, 0, 0, 0.12);
+    }
+  }
+
   @media (prefers-color-scheme: light) {
     :root {
       --background: 0 0% 98%;

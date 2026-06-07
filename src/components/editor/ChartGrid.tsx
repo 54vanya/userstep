@@ -7,6 +7,7 @@ import {
   blockRowCount,
   BLOCK_DIVIDER_HEIGHT,
   COLUMN_WIDTH,
+  CURSOR_LINE_Y,
 } from '@/utils/geometry'
 import type { BlockLayout } from '@/utils/geometry'
 import { useEditor } from '@/hooks/useEditor'
@@ -123,6 +124,36 @@ function ChartGridInner({
   const { isPlaying, setCurrentTime } = useEditorStore()
   const activeTab = tabs.find(t => t.id === activeTabId)
 
+  const highlightRef = useRef<HTMLDivElement>(null)
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    const el = scrollRef.current
+    const hl = highlightRef.current
+    if (!el || !hl) return
+    const rect = el.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const chartY = e.clientY - rect.top + el.scrollTop - CURSOR_LINE_Y
+    const col = Math.floor(x / COLUMN_WIDTH)
+    if (col < 0 || col >= cols) { hl.style.display = 'none'; return }
+    for (const layout of blockLayouts) {
+      if (chartY >= layout.startY && chartY < layout.endY) {
+        const row = Math.floor((chartY - layout.startY) / layout.rh)
+        if (row >= 0 && row < layout.totalRows) {
+          hl.style.display = 'block'
+          hl.style.left = `${col * COLUMN_WIDTH}px`
+          hl.style.top = `${layout.startY + row * layout.rh}px`
+          hl.style.height = `${layout.rh}px`
+          return
+        }
+      }
+    }
+    hl.style.display = 'none'
+  }
+
+  const handleMouseLeave = () => {
+    if (highlightRef.current) highlightRef.current.style.display = 'none'
+  }
+
   const blocks = useMemo(() => blockLayouts.map(l => l.block), [blockLayouts])
   usePlayback(blocks, blockLayouts, scrollRef)
 
@@ -158,8 +189,8 @@ function ChartGridInner({
       ? blockLayouts[blockLayouts.length - 1].endY + BLOCK_DIVIDER_HEIGHT
       : 0
 
-  const visTop = scrollTop - BUFFER_PX
-  const visBot = scrollTop + containerH + BUFFER_PX
+  const visTop = scrollTop - CURSOR_LINE_Y - BUFFER_PX
+  const visBot = scrollTop - CURSOR_LINE_Y + containerH + BUFFER_PX
 
   return (
     <div className="flex h-full overflow-hidden">
@@ -172,13 +203,27 @@ function ChartGridInner({
           style={{ touchAction: 'pan-y' }}
           onScroll={e => handleScroll(e.currentTarget.scrollTop)}
           onContextMenu={e => e.preventDefault()}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={handleMouseLeave}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerCancel}
         >
           <Cursor />
+          <div style={{ height: CURSOR_LINE_Y, flexShrink: 0 }} />
           <div style={{ height: totalHeight, position: 'relative', width: cols * COLUMN_WIDTH }}>
+            <div
+              ref={highlightRef}
+              className="grid-cell-hover"
+              style={{
+                display: 'none',
+                position: 'absolute',
+                width: COLUMN_WIDTH,
+                pointerEvents: 'none',
+                zIndex: 2,
+              }}
+            />
             {blockLayouts.map(({ block, startY, endY, rh, totalRows }) => {
               if (endY + BLOCK_DIVIDER_HEIGHT < visTop || startY > visBot) return null
 
@@ -213,6 +258,7 @@ function ChartGridInner({
               )
             })}
           </div>
+          <div style={{ height: Math.max(0, containerH - CURSOR_LINE_Y), flexShrink: 0 }} />
         </div>
       </div>
     </div>

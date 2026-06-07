@@ -5,6 +5,7 @@ class AudioEngine {
   private startedAt = 0
   private offsetMs = 0
   private _isPlaying = false
+  private _playbackRate = 1.0
   private endListeners: Array<() => void> = []
 
   private getCtx(): AudioContext {
@@ -24,6 +25,7 @@ class AudioEngine {
     this._stopSource()
     this.source = ctx.createBufferSource()
     this.source.buffer = this.buffer
+    this.source.playbackRate.value = this._playbackRate
     this.source.connect(ctx.destination)
     this.offsetMs = Math.max(0, fromMs)
     this.startedAt = ctx.currentTime
@@ -55,7 +57,17 @@ class AudioEngine {
 
   getCurrentMs(): number {
     if (!this._isPlaying || !this.ctx) return this.offsetMs
-    return this.offsetMs + (this.ctx.currentTime - this.startedAt) * 1000
+    return this.offsetMs + (this.ctx.currentTime - this.startedAt) * 1000 * this._playbackRate
+  }
+
+  setPlaybackRate(rate: number): void {
+    if (this._isPlaying) {
+      const currentMs = this.getCurrentMs()
+      this._playbackRate = rate
+      this.play(currentMs)
+    } else {
+      this._playbackRate = rate
+    }
   }
 
   isPlaying(): boolean {
