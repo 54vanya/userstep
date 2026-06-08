@@ -31,6 +31,11 @@ interface ChartMetaPatch {
   chartType?: Chart['chartType']
 }
 
+interface EditorSettingsPatch {
+  scale?: number
+  playbackRate?: number
+}
+
 interface TabsState {
   tabs: Tab[]
   activeTabId: string | null
@@ -40,8 +45,12 @@ interface TabsState {
   setActiveTab: (tabId: string) => void
   updateChart: (tabId: string, chart: Chart) => void
   updateChartMeta: (tabId: string, patch: ChartMetaPatch) => void
+  importChartIntoTab: (tabId: string, chart: Chart, label: string, settings?: EditorSettingsPatch) => void
   markDirty: (tabId: string, dirty: boolean) => void
+  markBlank: (tabId: string, isBlank: boolean) => void
   setAudioBlob: (tabId: string, blob: Blob, fileName: string) => void
+  setTabScale: (tabId: string, scale: number) => void
+  setTabPlaybackRate: (tabId: string, rate: number) => void
 }
 
 const _stored = loadSession()
@@ -60,6 +69,9 @@ export const useTabsStore = create<TabsState>()(
           chart: newChart,
           isDirty: false,
           label: label ?? newChart.meta.title ?? 'New Chart',
+          scale: 3,
+          playbackRate: 1.0,
+          isBlank: chart === undefined,
         }
         set(state => ({
           tabs: [...state.tabs, tab],
@@ -100,8 +112,29 @@ export const useTabsStore = create<TabsState>()(
               ...(patch.chartType !== undefined ? { chartType: patch.chartType } : {}),
               meta: { ...t.chart.meta, ...patch.meta },
             }
-            const label = patch.meta?.title || t.label
+            const label = patch.meta?.title ?? t.label
             return { ...t, chart, label, isDirty: true }
+          }),
+        }))
+      },
+
+      importChartIntoTab: (tabId, chart, label, settings) => {
+        set(state => ({
+          tabs: state.tabs.map(t => {
+            if (t.id !== tabId) return t
+            return {
+              ...t,
+              chart,
+              label,
+              isDirty: true,
+              isBlank: false,
+              ...(settings?.scale !== undefined
+                ? { scale: Math.min(10, Math.max(1, settings.scale)) }
+                : {}),
+              ...(settings?.playbackRate !== undefined
+                ? { playbackRate: Math.round(Math.min(1.5, Math.max(0.5, settings.playbackRate)) * 10) / 10 }
+                : {}),
+            }
           }),
         }))
       },
@@ -112,6 +145,12 @@ export const useTabsStore = create<TabsState>()(
         }))
       },
 
+      markBlank: (tabId, isBlank) => {
+        set(state => ({
+          tabs: state.tabs.map(t => t.id === tabId ? { ...t, isBlank } : t),
+        }))
+      },
+
       setAudioBlob: (tabId, blob, fileName) => {
         set(state => ({
           tabs: state.tabs.map(t =>
@@ -119,6 +158,20 @@ export const useTabsStore = create<TabsState>()(
               ? { ...t, audioBlob: blob, chart: { ...t.chart, audioFileName: fileName } }
               : t
           ),
+        }))
+      },
+
+      setTabScale: (tabId, scale) => {
+        const clamped = Math.min(10, Math.max(1, scale))
+        set(state => ({
+          tabs: state.tabs.map(t => t.id === tabId ? { ...t, scale: clamped } : t),
+        }))
+      },
+
+      setTabPlaybackRate: (tabId, rate) => {
+        const clamped = Math.round(Math.min(1.5, Math.max(0.5, rate)) * 10) / 10
+        set(state => ({
+          tabs: state.tabs.map(t => t.id === tabId ? { ...t, playbackRate: clamped } : t),
         }))
       },
     }),

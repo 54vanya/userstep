@@ -17,6 +17,7 @@ export function msToScrollY(ms: number, offsets: BlockOffset[], layouts: BlockLa
   if (offsets.length === 0) return 0
   for (let i = offsets.length - 1; i >= 0; i--) {
     if (ms >= offsets[i].startMs) {
+      if (i >= layouts.length) continue
       const row = (ms - offsets[i].startMs) / offsets[i].msPerRow
       return layouts[i].startY + row * layouts[i].rh
     }

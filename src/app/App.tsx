@@ -3,11 +3,15 @@ import { Toolbar } from '@/components/toolbar/Toolbar'
 import { Sidebar } from '@/components/sidebar/Sidebar'
 import { ChartEditor } from '@/components/editor/ChartEditor'
 import { useTabsStore } from '@/store/tabsStore'
+import { useEditorStore } from '@/store/editorStore'
+import { audioEngine } from '@/services/audioEngine'
 import { parseUcs } from '@/services/ucsParser'
 import { usePwaUpdate } from '@/hooks/usePwaUpdate'
 
 export function App() {
-  const { tabs } = useTabsStore()
+  const { tabs, activeTabId } = useTabsStore()
+  const activeTab = tabs.find(t => t.id === activeTabId)
+  const showSidebar = !!activeTab && !activeTab.isBlank
   const { needRefresh, update } = usePwaUpdate()
 
   return (
@@ -28,7 +32,7 @@ export function App() {
         <>
           <Toolbar />
           <div className="flex flex-1 overflow-hidden">
-            <Sidebar />
+            {showSidebar && <Sidebar />}
             <ChartEditor />
           </div>
         </>
@@ -40,7 +44,8 @@ export function App() {
 }
 
 function WelcomeScreen() {
-  const { addTab } = useTabsStore()
+  const { addTab, setTabScale, setTabPlaybackRate } = useTabsStore()
+  const { setCurrentTime } = useEditorStore()
 
   const handleImportUcs = () => {
     const input = document.createElement('input')
@@ -75,7 +80,15 @@ function WelcomeScreen() {
       reader.onload = (e) => {
         try {
           const chart = JSON.parse(e.target?.result as string)
-          addTab(chart, chart.meta?.title || file.name.replace(/\.piu\.json$|\.json$/, ''))
+          const label = chart.meta?.title || file.name.replace(/\.piu\.json$|\.json$/, '')
+          const tabId = addTab(chart, label)
+          const s = chart.editorSettings
+          if (s) {
+            setTabScale(tabId, s.scale)
+            setTabPlaybackRate(tabId, s.playbackRate)
+            audioEngine.setPlaybackRate(s.playbackRate)
+            setCurrentTime(s.currentTime)
+          }
         } catch {
           alert('Failed to parse .piu.json file')
         }

@@ -1,16 +1,30 @@
-import { useEditorStore } from '@/store/editorStore'
 import { audioEngine } from '@/services/audioEngine'
 import { useTabsStore } from '@/store/tabsStore'
+import { useEditorStore } from '@/store/editorStore'
 import { parseUcs } from '@/services/ucsParser'
 import { serializeToUcs } from '@/services/ucsSerializer'
 import { useAudio } from '@/hooks/useAudio'
 
 export function Toolbar() {
-  const { scale, setScale, playbackRate, setPlaybackRate } = useEditorStore()
-  const { tabs, activeTabId, addTab } = useTabsStore()
-  const { openAudio, audioFileName } = useAudio()
-
+  const { tabs, activeTabId, addTab, setTabScale, setTabPlaybackRate } = useTabsStore()
+  const { isPlaying, currentTime, setPlaying, setCurrentTime, showColumnDividers, setShowColumnDividers } = useEditorStore()
   const activeTab = tabs.find(t => t.id === activeTabId)
+  const { openAudio, audioFileName } = useAudio()
+  const scale = activeTab?.scale ?? 3
+  const playbackRate = activeTab?.playbackRate ?? 1.0
+
+  const handlePlayPause = () => {
+    if (!audioEngine.hasAudio()) return
+    if (isPlaying) {
+      const pausedAt = audioEngine.getCurrentMs()
+      audioEngine.pause()
+      setPlaying(false)
+      setCurrentTime(pausedAt)
+    } else {
+      audioEngine.play(currentTime)
+      setPlaying(true)
+    }
+  }
 
   const handleImportUcs = () => {
     const input = document.createElement('input')
@@ -24,8 +38,8 @@ export function Toolbar() {
         const text = e.target?.result as string
         try {
           const chart = parseUcs(text)
-          chart.meta.title = file.name.replace('.ucs', '')
-          addTab(chart, file.name.replace('.ucs', ''))
+          chart.meta.title = file.name.replace(/\.ucs$/i, '')
+          addTab(chart, file.name.replace(/\.ucs$/i, ''))
         } catch {
           alert('Failed to parse UCS file')
         }
@@ -49,7 +63,15 @@ export function Toolbar() {
 
   const handleSavePiu = () => {
     if (!activeTab) return
-    const json = JSON.stringify(activeTab.chart, null, 2)
+    const chartWithSettings = {
+      ...activeTab.chart,
+      editorSettings: {
+        scale: activeTab.scale,
+        playbackRate: activeTab.playbackRate,
+        currentTime,
+      },
+    }
+    const json = JSON.stringify(chartWithSettings, null, 2)
     const blob = new Blob([json], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -70,7 +92,14 @@ export function Toolbar() {
       reader.onload = (e) => {
         try {
           const chart = JSON.parse(e.target?.result as string)
-          addTab(chart, chart.meta?.title || file.name.replace(/\.piu\.json$|\.json$/, ''))
+          const label = chart.meta?.title || file.name.replace(/\.piu\.json$|\.json$/, '')
+          const tabId = addTab(chart, label)
+          if (chart.editorSettings) {
+            setTabScale(tabId, chart.editorSettings.scale)
+            setTabPlaybackRate(tabId, chart.editorSettings.playbackRate)
+            audioEngine.setPlaybackRate(chart.editorSettings.playbackRate)
+            setCurrentTime(chart.editorSettings.currentTime)
+          }
         } catch {
           alert('Failed to parse .piu.json file')
         }
@@ -82,6 +111,24 @@ export function Toolbar() {
 
   return (
     <div className="flex items-center gap-3 px-3 h-10 border-b border-border bg-card shrink-0 text-sm">
+      <button
+        onClick={handlePlayPause}
+        disabled={!audioEngine.hasAudio()}
+        className="w-7 h-7 flex items-center justify-center rounded bg-primary text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-40"
+        title={isPlaying ? 'Pause (Space)' : 'Play (Space)'}
+      >
+        {isPlaying ? (
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+            <rect x="1" y="1" width="4" height="10" rx="1"/>
+            <rect x="7" y="1" width="4" height="10" rx="1"/>
+          </svg>
+        ) : (
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+            <path d="M2 1.5l9 4.5-9 4.5z"/>
+          </svg>
+        )}
+      </button>
+
       <div className="flex items-center gap-2">
         <span className="text-muted-foreground text-xs">Scale</span>
         <input
@@ -90,7 +137,8 @@ export function Toolbar() {
           max={10}
           step={0.1}
           value={scale}
-          onChange={e => setScale(parseFloat(e.target.value))}
+          onChange={e => activeTabId && setTabScale(activeTabId, parseFloat(e.target.value))}
+          onMouseUp={e => e.currentTarget.blur()}
           className="w-24 accent-primary"
         />
         <span className="text-xs text-muted-foreground w-8">{scale.toFixed(1)}</span>
@@ -106,13 +154,24 @@ export function Toolbar() {
           value={playbackRate}
           onChange={e => {
             const rate = parseFloat(e.target.value)
-            setPlaybackRate(rate)
+            if (activeTabId) setTabPlaybackRate(activeTabId, rate)
             audioEngine.setPlaybackRate(rate)
           }}
+          onMouseUp={e => e.currentTarget.blur()}
           className="w-20 accent-primary"
         />
         <span className="text-xs text-muted-foreground w-6">×{playbackRate.toFixed(1)}</span>
       </div>
+
+      <label className="flex items-center gap-1.5 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          checked={showColumnDividers}
+          onChange={e => setShowColumnDividers(e.target.checked)}
+          className="accent-primary"
+        />
+        <span className="text-xs text-muted-foreground">Col lines</span>
+      </label>
 
       <div className="ml-auto flex items-center gap-2">
         <button

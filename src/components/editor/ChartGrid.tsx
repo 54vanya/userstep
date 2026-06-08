@@ -1,4 +1,4 @@
-import { useRef, useState, useMemo, useEffect } from 'react'
+import { useRef, useState, useMemo, useEffect, useLayoutEffect } from 'react'
 import { useTabsStore } from '@/store/tabsStore'
 import { useEditorStore } from '@/store/editorStore'
 import {
@@ -8,11 +8,12 @@ import {
   BLOCK_DIVIDER_HEIGHT,
   COLUMN_WIDTH,
   CURSOR_LINE_Y,
+  LABEL_WIDTH,
 } from '@/utils/geometry'
 import type { BlockLayout } from '@/utils/geometry'
 import { useEditor } from '@/hooks/useEditor'
 import { usePlayback } from '@/hooks/usePlayback'
-import { computeBlockOffsets, scrollYToMs } from '@/utils/timing'
+import { computeBlockOffsets, msToScrollY, scrollYToMs } from '@/utils/timing'
 import { ColumnHeaders } from './ColumnHeaders'
 import { BlockLabels } from './BlockLabels'
 import { NoteRow, type CellType } from './NoteRow'
@@ -55,8 +56,8 @@ const BUFFER_PX = 300
 
 export function ChartGrid() {
   const { tabs, activeTabId } = useTabsStore()
-  const { scale } = useEditorStore()
   const activeTab = tabs.find(t => t.id === activeTabId)
+  const scale = activeTab?.scale ?? 3
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const [scrollTop, setScrollTop] = useState(0)
@@ -95,6 +96,7 @@ export function ChartGrid() {
       scrollTop={scrollTop}
       containerH={containerH}
       cols={cols}
+      scale={scale}
       activeTabId={activeTabId}
       onScroll={setScrollTop}
     />
@@ -107,6 +109,7 @@ interface InnerProps {
   scrollTop: number
   containerH: number
   cols: number
+  scale: number
   activeTabId: string | null
   onScroll: (y: number) => void
 }
@@ -117,12 +120,42 @@ function ChartGridInner({
   scrollTop,
   containerH,
   cols,
+  scale,
   activeTabId,
   onScroll,
 }: InnerProps) {
   const { tabs } = useTabsStore()
-  const { isPlaying, setCurrentTime } = useEditorStore()
+  const { isPlaying, currentTime, setCurrentTime } = useEditorStore()
   const activeTab = tabs.find(t => t.id === activeTabId)
+
+  const prevChartIdRef = useRef<string | undefined>(activeTab?.chart.id)
+  const prevTabIdRef = useRef<string | null>(activeTabId)
+  useLayoutEffect(() => {
+    const prevId = prevChartIdRef.current
+    const prevTabId = prevTabIdRef.current
+    const newId = activeTab?.chart.id
+    prevChartIdRef.current = newId
+    prevTabIdRef.current = activeTabId
+    // Only restore scroll when chart changed within the same tab (import), not on tab switch
+    if (prevId === newId || prevTabId !== activeTabId || !scrollRef.current || blockLayouts.length === 0) return
+    const offsets = computeBlockOffsets(blockLayouts.map(l => l.block))
+    const y = msToScrollY(currentTime, offsets, blockLayouts)
+    scrollRef.current.scrollTop = y
+    onScroll(y)
+  }, [activeTab?.chart.id, activeTabId, blockLayouts])
+
+  const isPlayingRef = useRef(isPlaying)
+  useEffect(() => { isPlayingRef.current = isPlaying }, [isPlaying])
+
+  const prevScaleRef = useRef(scale)
+  useLayoutEffect(() => {
+    const prevScale = prevScaleRef.current
+    prevScaleRef.current = scale
+    if (prevScale === scale || !scrollRef.current || isPlayingRef.current) return
+    const newScrollTop = scrollRef.current.scrollTop * (scale / prevScale)
+    scrollRef.current.scrollTop = newScrollTop
+    onScroll(newScrollTop)
+  }, [scale])
 
   const highlightRef = useRef<HTMLDivElement>(null)
 
@@ -131,7 +164,7 @@ function ChartGridInner({
     const hl = highlightRef.current
     if (!el || !hl) return
     const rect = el.getBoundingClientRect()
-    const x = e.clientX - rect.left
+    const x = e.clientX - rect.left - LABEL_WIDTH
     const chartY = e.clientY - rect.top + el.scrollTop - CURSOR_LINE_Y
     const col = Math.floor(x / COLUMN_WIDTH)
     if (col < 0 || col >= cols) { hl.style.display = 'none'; return }
@@ -192,27 +225,34 @@ function ChartGridInner({
   const visTop = scrollTop - CURSOR_LINE_Y - BUFFER_PX
   const visBot = scrollTop - CURSOR_LINE_Y + containerH + BUFFER_PX
 
+  const notesWidth = cols * COLUMN_WIDTH
+
   return (
-    <div className="flex h-full overflow-hidden">
-      <BlockLabels blockLayouts={blockLayouts} scrollRef={scrollRef} totalHeight={totalHeight} />
-      <div className="flex flex-col flex-1 overflow-hidden">
+    <div className="flex flex-col h-full overflow-hidden">
+      <div className="flex shrink-0">
+        <div className="shrink-0 border-b border-r border-grid-beat bg-card" style={{ width: LABEL_WIDTH, height: 32 }} />
         <ColumnHeaders cols={cols} />
-        <div
-          ref={scrollRef}
-          className="flex-1 overflow-y-auto overflow-x-auto bg-grid select-none"
-          style={{ touchAction: 'pan-y' }}
-          onScroll={e => handleScroll(e.currentTarget.scrollTop)}
-          onContextMenu={e => e.preventDefault()}
-          onMouseMove={handleMouseMove}
-          onMouseLeave={handleMouseLeave}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerCancel}
-        >
-          <Cursor />
-          <div style={{ height: CURSOR_LINE_Y, flexShrink: 0 }} />
-          <div style={{ height: totalHeight, position: 'relative', width: cols * COLUMN_WIDTH }}>
+      </div>
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto overflow-x-auto bg-grid select-none"
+        style={{ touchAction: 'pan-y' }}
+        onScroll={e => handleScroll(e.currentTarget.scrollTop)}
+        onContextMenu={e => e.preventDefault()}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerCancel}
+      >
+        <Cursor />
+        <div style={{ height: CURSOR_LINE_Y, flexShrink: 0 }} />
+        <div style={{ position: 'relative', height: totalHeight, width: LABEL_WIDTH + notesWidth }}>
+          <BlockLabels blockLayouts={blockLayouts} totalHeight={totalHeight} />
+          <div
+            style={{ position: 'absolute', left: LABEL_WIDTH, top: 0, width: notesWidth, height: totalHeight }}
+          >
             <div
               ref={highlightRef}
               className="grid-cell-hover"
@@ -258,8 +298,8 @@ function ChartGridInner({
               )
             })}
           </div>
-          <div style={{ height: Math.max(0, containerH - CURSOR_LINE_Y), flexShrink: 0 }} />
         </div>
+        <div style={{ height: Math.max(0, containerH - CURSOR_LINE_Y), flexShrink: 0 }} />
       </div>
     </div>
   )

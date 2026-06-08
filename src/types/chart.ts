@@ -20,6 +20,12 @@ export interface Block {
   rowCount?: number
 }
 
+export interface EditorSettings {
+  scale: number
+  playbackRate: number
+  currentTime: number
+}
+
 export interface Chart {
   id: string
   version: number
@@ -28,6 +34,7 @@ export interface Chart {
   difficulty: number
   blocks: Block[]
   audioFileName?: string
+  editorSettings?: EditorSettings
 }
 
 export interface Tab {
@@ -37,6 +44,9 @@ export interface Tab {
   isDirty: boolean
   filePath?: string
   label: string
+  scale: number
+  playbackRate: number
+  isBlank?: boolean
 }
 
 export interface EditorState {

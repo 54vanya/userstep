@@ -4,6 +4,7 @@ export const COLUMN_WIDTH = 40
 export const BASE_BEAT_HEIGHT = 32
 export const BLOCK_DIVIDER_HEIGHT = 0
 export const CURSOR_LINE_Y = 40
+export const LABEL_WIDTH = 64
 
 export interface BlockLayout {
   block: Block

@@ -1,6 +1,6 @@
 import { useRef, useState, useCallback } from 'react'
 import { useTabsStore } from '@/store/tabsStore'
-import { COLUMN_WIDTH, CURSOR_LINE_Y } from '@/utils/geometry'
+import { COLUMN_WIDTH, CURSOR_LINE_Y, LABEL_WIDTH } from '@/utils/geometry'
 import type { BlockLayout } from '@/utils/geometry'
 import type { Note, Block } from '@/types/chart'
 
@@ -17,6 +17,7 @@ interface DragState {
   startRow: number
   currentRow: number
   startedOnNote: boolean
+  draggedUp: boolean
 }
 
 function isNoteOccupied(block: Block, row: number, col: number): boolean {
@@ -44,7 +45,7 @@ export function useEditor(
     const el = scrollRef.current
     if (!el) return null
     const rect = el.getBoundingClientRect()
-    const px = clientX - rect.left
+    const px = clientX - rect.left - LABEL_WIDTH
     const py = clientY - rect.top + el.scrollTop - CURSOR_LINE_Y
 
     const col = Math.floor(px / COLUMN_WIDTH)
@@ -74,6 +75,7 @@ export function useEditor(
       startRow: row,
       currentRow: row,
       startedOnNote: onNote,
+      draggedUp: false,
     }
     ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
     e.preventDefault()
@@ -93,9 +95,10 @@ export function useEditor(
     if (!layout) return
 
     const rawRow = Math.floor((py - layout.startY) / layout.rh)
+    const draggedUp = !drag.startedOnNote && rawRow < drag.startRow
     const newRow = Math.max(drag.startRow, Math.min(layout.totalRows - 1, rawRow))
 
-    dragRef.current = { ...drag, currentRow: newRow }
+    dragRef.current = { ...drag, currentRow: newRow, draggedUp }
 
     if (!drag.startedOnNote && newRow > drag.startRow) {
       setPreview({ blockId: drag.blockId, col: drag.col, startRow: drag.startRow, endRow: newRow })
@@ -132,6 +135,9 @@ export function useEditor(
 
     // If drag started on existing note but was dragged — ignore (no-op)
     if (startedOnNote) return
+
+    // User dragged upward from empty cell — treat as cancellation
+    if (drag.draggedUp) return
 
     // Clear any notes overlapping the new note's column range
     const filtered = block.notes.filter(n => {

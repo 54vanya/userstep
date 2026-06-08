@@ -29,12 +29,11 @@ export function ColumnHeaders({ cols }: Props) {
     >
       {Array.from({ length: cols }, (_, i) => {
         const idx = i % 5
-        const isP2Start = cols === 10 && i === 5
         const arrow = ARROWS[idx]
         return (
           <div
             key={i}
-            className={`flex items-center justify-center text-sm font-bold ${ARROW_COLORS[idx]} ${isP2Start ? 'border-l-2 border-grid-measure' : ''}`}
+            className={`flex items-center justify-center text-sm font-bold ${ARROW_COLORS[idx]}`}
             style={{ width: COLUMN_WIDTH, flexShrink: 0 }}
           >
             {arrow === null

@@ -3,11 +3,16 @@ import { useTabsStore } from '@/store/tabsStore'
 import { useEditorStore } from '@/store/editorStore'
 import { audioEngine } from '@/services/audioEngine'
 import { ChartGrid } from './ChartGrid'
+import { WelcomeScreen } from './WelcomeScreen'
 
 export function ChartEditor() {
   const { tabs, activeTabId } = useTabsStore()
   const { isPlaying, currentTime, setPlaying, setCurrentTime } = useEditorStore()
   const activeTab = tabs.find(t => t.id === activeTabId)
+
+  useEffect(() => {
+    audioEngine.setPlaybackRate(activeTab?.playbackRate ?? 1.0)
+  }, [activeTabId, activeTab?.playbackRate])
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -46,7 +51,16 @@ export function ChartEditor() {
         const { tabs: currentTabs, activeTabId: currentActiveId } = useTabsStore.getState()
         const tab = currentTabs.find(t => t.id === currentActiveId)
         if (!tab) return
-        const json = JSON.stringify(tab.chart, null, 2)
+        const { currentTime: ct } = useEditorStore.getState()
+        const chartWithSettings = {
+          ...tab.chart,
+          editorSettings: {
+            scale: tab.scale,
+            playbackRate: tab.playbackRate,
+            currentTime: ct,
+          },
+        }
+        const json = JSON.stringify(chartWithSettings, null, 2)
         const blob = new Blob([json], { type: 'application/json' })
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
@@ -71,6 +85,10 @@ export function ChartEditor() {
         </div>
       </div>
     )
+  }
+
+  if (activeTab.isBlank) {
+    return <WelcomeScreen tabId={activeTab.id} />
   }
 
   return (

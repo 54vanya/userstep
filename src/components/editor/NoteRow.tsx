@@ -1,4 +1,5 @@
 import { COLUMN_WIDTH } from '@/utils/geometry'
+import { useEditorStore } from '@/store/editorStore'
 import type { Block } from '@/types/chart'
 
 export type CellType = 'tap' | 'hold-start' | 'hold-body' | 'hold-end'
@@ -43,6 +44,7 @@ function CellFill({ type, ghost }: { type: CellType | undefined; ghost?: boolean
 export function NoteRow({ row, block, cols, rh, top, rowMap, previewCol, previewType }: Props) {
   const cells = rowMap.get(row)
   const lineClass = getLineClass(row, block)
+  const showColumnDividers = useEditorStore(s => s.showColumnDividers)
 
   return (
     <div
@@ -50,13 +52,12 @@ export function NoteRow({ row, block, cols, rh, top, rowMap, previewCol, preview
       style={{ top, height: Math.max(rh, 1), width: cols * COLUMN_WIDTH }}
     >
       {Array.from({ length: cols }, (_, col) => {
-        const isP2Start = cols === 10 && col === 5
         const realType = cells?.get(col)
         const isPreviewCol = col === previewCol && !realType
         return (
           <div
             key={col}
-            className={`relative flex-shrink-0 ${isP2Start ? 'border-l border-grid-beat' : ''}`}
+            className={`relative flex-shrink-0 ${showColumnDividers && col < cols - 1 ? 'border-r border-grid-beat' : ''}`}
             style={{ width: COLUMN_WIDTH, height: '100%' }}
           >
             {realType
