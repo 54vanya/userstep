@@ -63,10 +63,18 @@ function parseRawBlocks(lines: string[]): { mode: ChartMode; rawBlocks: RawBlock
   return { mode, rawBlocks }
 }
 
-function rowsToNotes(rows: string[]): Note[] {
+// carryOver: cols with active holds from previous block (mutated in-place)
+function rowsToNotes(rows: string[], carryOver: Map<number, boolean>): Note[] {
   const notes: Note[] = []
-  // Track active holds: col -> startRow
-  const holdStarts = new Map<number, number>()
+  // col -> { startRow, continued, lastActiveRow }
+  // lastActiveRow: last row index where M or H appeared (-1 = none seen yet in this block)
+  const holdStarts = new Map<number, { row: number; continued: boolean; lastActiveRow: number }>()
+
+  // Seed holds carried over from previous block
+  carryOver.forEach((_, col) => {
+    holdStarts.set(col, { row: 0, continued: true, lastActiveRow: -1 })
+  })
+  carryOver.clear()
 
   for (let row = 0; row < rows.length; row++) {
     const rowStr = rows[row]
@@ -75,21 +83,34 @@ function rowsToNotes(rows: string[]): Note[] {
       if (ch === 'X') {
         notes.push({ row, col, type: 'tap' })
       } else if (ch === 'M') {
-        holdStarts.set(col, row)
+        holdStarts.set(col, { row, continued: false, lastActiveRow: row })
+      } else if (ch === 'H') {
+        const hold = holdStarts.get(col)
+        if (hold) holdStarts.set(col, { ...hold, lastActiveRow: row })
       } else if (ch === 'W') {
-        const startRow = holdStarts.get(col)
-        if (startRow !== undefined) {
-          notes.push({ row: startRow, col, type: 'hold', endRow: row })
+        const hold = holdStarts.get(col)
+        if (hold !== undefined) {
+          const note: Note = { row: hold.row, col, type: 'hold', endRow: row }
+          if (hold.continued) note.continued = true
+          notes.push(note)
           holdStarts.delete(col)
         }
       }
-      // 'H' (hold body) is implicit between M and W
     }
   }
 
-  // Close any unclosed holds at end of block
-  holdStarts.forEach((startRow, col) => {
-    notes.push({ row: startRow, col, type: 'hold', endRow: rows.length - 1 })
+  // Holds still open at block end
+  holdStarts.forEach((hold, col) => {
+    const lastActive = hold.lastActiveRow
+    // No active rows seen in this block (continued hold with no H): skip silently
+    if (lastActive < 0) return
+    const endRow = lastActive
+    const crossesBlockEnd = endRow === rows.length - 1
+    const note: Note = { row: hold.row, col, type: 'hold', endRow }
+    if (hold.continued) note.continued = true
+    if (crossesBlockEnd) note.continues = true
+    notes.push(note)
+    if (crossesBlockEnd) carryOver.set(col, true)
   })
 
   return notes
@@ -99,6 +120,7 @@ export function parseUcs(text: string): Chart {
   const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0)
   const { mode, rawBlocks } = parseRawBlocks(lines)
 
+  const carryOver = new Map<number, boolean>()
   const blocks: Block[] = rawBlocks.map(rb => {
     const measures = Math.max(1, Math.round(rb.rows.length / (rb.beat * rb.split)))
     const expectedRows = rb.beat * rb.split * measures
@@ -110,7 +132,7 @@ export function parseUcs(text: string): Chart {
       split: rb.split,
       measures,
       rowCount: rb.rows.length !== expectedRows ? rb.rows.length : undefined,
-      notes: rowsToNotes(rb.rows),
+      notes: rowsToNotes(rb.rows, carryOver),
     }
   })
 

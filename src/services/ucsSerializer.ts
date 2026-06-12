@@ -1,7 +1,6 @@
 import type { Block, Chart, Note } from '@/types/chart'
 
 function notesToRows(notes: Note[], totalRows: number, cols: number): string[] {
-  // Initialize rows with dots
   const rows: string[][] = Array.from({ length: totalRows }, () => Array(cols).fill('.'))
 
   for (const note of notes) {
@@ -11,14 +10,19 @@ function notesToRows(notes: Note[], totalRows: number, cols: number): string[] {
       }
     } else if (note.type === 'hold') {
       const endRow = note.endRow ?? note.row
-      if (note.row < totalRows && note.col < cols) {
-        rows[note.row][note.col] = 'M'
-      }
-      for (let r = note.row + 1; r < endRow && r < totalRows; r++) {
-        if (note.col < cols) rows[r][note.col] = 'H'
-      }
-      if (endRow < totalRows && endRow !== note.row && note.col < cols) {
-        rows[endRow][note.col] = 'W'
+      const col = note.col
+      if (col >= cols) continue
+
+      if (note.continued && endRow === note.row) {
+        // Continuation that ends on the very first row: write W
+        if (note.row < totalRows) rows[note.row][col] = 'W'
+      } else {
+        const startChar = note.continued ? 'H' : 'M'
+        if (note.row < totalRows) rows[note.row][col] = startChar
+        for (let r = note.row + 1; r < endRow && r < totalRows; r++) rows[r][col] = 'H'
+        if (endRow > note.row && endRow < totalRows) {
+          rows[endRow][col] = note.continues ? 'H' : 'W'
+        }
       }
     }
   }
@@ -33,7 +37,7 @@ function serializeBlock(block: Block, cols: number, isFirst: boolean): string {
   lines.push(`:Beat=${block.beat}`)
   lines.push(`:Split=${block.split}`)
 
-  const totalRows = block.beat * block.split * block.measures
+  const totalRows = block.rowCount ?? block.beat * block.split * block.measures
   const rows = notesToRows(block.notes, totalRows, cols)
   lines.push(...rows)
 

@@ -6,6 +6,12 @@ import { serializeToUcs } from '../ucsSerializer'
 
 const cs266 = readFileSync(resolve(__dirname, '../../../fileExamples/CS266.ucs'), 'utf-8')
 const cs349 = readFileSync(resolve(__dirname, '../../../fileExamples/CS349.ucs'), 'utf-8')
+const cs677 = readFileSync(resolve(__dirname, '../../../fileExamples/CS677.ucs'), 'utf-8')
+
+// Normalize a UCS string for comparison: Unix line endings, trim trailing spaces per line
+function normalizeUcs(s: string): string {
+  return s.replace(/\r\n/g, '\n').split('\n').map(l => l.trimEnd()).join('\n').replace(/\n+$/, '\n')
+}
 
 describe('parseUcs', () => {
   it('parses CS266 (Double mode)', () => {
@@ -95,5 +101,16 @@ describe('serializeToUcs', () => {
     const chart = parseUcs(cs266)
     const ucs = serializeToUcs(chart)
     expect(ucs.startsWith(':Format=1')).toBe(true)
+  })
+})
+
+describe('UCS roundtrip file identity', () => {
+  // CS266 uses standard UCS notation (continuous H body, W endings) — roundtrip must be exact.
+  // CS349 and CS677 use non-standard notation (gapped H rows or H-without-W) which the parser
+  // normalizes to valid holds; their serialized output intentionally differs from the original.
+  it('CS266: import then export produces identical content', () => {
+    const chart = parseUcs(cs266)
+    const out = serializeToUcs(chart)
+    expect(normalizeUcs(out)).toBe(normalizeUcs(cs266))
   })
 })

@@ -6,6 +6,10 @@ export interface Note {
   col: number
   type: NoteType
   endRow?: number
+  /** True when this hold is a continuation from the previous block (no arrow head) */
+  continued?: boolean
+  /** True when this hold continues into the next block (no cap at end) */
+  continues?: boolean
 }
 
 export interface Block {

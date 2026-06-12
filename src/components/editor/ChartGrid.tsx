@@ -33,8 +33,9 @@ function buildRowMap(block: Block): Map<number, Map<number, CellType>> {
       const endRow = note.endRow ?? note.row
       for (let r = note.row; r <= endRow; r++) {
         if (!map.has(r)) map.set(r, new Map())
-        const t: CellType =
-          r === note.row ? 'hold-start' : r === endRow ? 'hold-end' : 'hold-body'
+        const isStart = r === note.row && !note.continued
+        const isEnd = r === endRow && !note.continues
+        const t: CellType = isStart ? 'hold-start' : isEnd ? 'hold-end' : 'hold-body'
         map.get(r)!.set(note.col, t)
       }
     }
@@ -42,13 +43,20 @@ function buildRowMap(block: Block): Map<number, Map<number, CellType>> {
   return map
 }
 
-function buildPreviewTypes(startRow: number, endRow: number): Map<number, CellType> {
+function buildPreviewTypes(
+  startRow: number,
+  endRow: number,
+  continued = false,
+  continues = false,
+): Map<number, CellType> {
   const map = new Map<number, CellType>()
-  if (startRow === endRow) {
+  if (startRow === endRow && !continued && !continues) {
     map.set(startRow, 'tap')
   } else {
     for (let r = startRow; r <= endRow; r++) {
-      map.set(r, r === startRow ? 'hold-start' : r === endRow ? 'hold-end' : 'hold-body')
+      const isStart = r === startRow && !continued
+      const isEnd = r === endRow && !continues
+      map.set(r, isStart ? 'hold-start' : isEnd ? 'hold-end' : 'hold-body')
     }
   }
   return map
@@ -237,10 +245,22 @@ function ChartGridInner({
     return maps
   }, [activeTab?.chart.blocks])
 
-  const previewTypes = useMemo(
-    () => preview ? buildPreviewTypes(preview.startRow, preview.endRow) : null,
-    [preview],
-  )
+  const previewTypesByBlock = useMemo(() => {
+    if (!preview) return null
+    const result = new Map<string, Map<number, CellType>>()
+    const startIdx = blockLayouts.findIndex(l => l.block.id === preview.startBlockId)
+    const endIdx = blockLayouts.findIndex(l => l.block.id === preview.endBlockId)
+    for (let i = startIdx; i <= endIdx; i++) {
+      const layout = blockLayouts[i]
+      if (!layout) continue
+      const isFirst = i === startIdx
+      const isLast = i === endIdx
+      const startR = isFirst ? preview.startRow : 0
+      const endR = isLast ? preview.endRow : layout.totalRows - 1
+      result.set(layout.block.id, buildPreviewTypes(startR, endR, !isFirst, !isLast))
+    }
+    return result
+  }, [preview, blockLayouts])
 
   if (!activeTab) return null
 
@@ -301,10 +321,10 @@ function ChartGridInner({
               const firstRow = Math.max(0, Math.floor((visTop - startY) / rh))
               const lastRow = Math.min(totalRows - 1, Math.ceil((visBot - startY) / rh))
 
-              const isPreviewBlock = preview?.blockId === block.id
+              const blockPreviewTypes = previewTypesByBlock?.get(block.id) ?? null
               const rows: React.ReactNode[] = []
               for (let r = firstRow; r <= lastRow; r++) {
-                const previewType = isPreviewBlock ? previewTypes?.get(r) : undefined
+                const previewType = blockPreviewTypes?.get(r)
                 rows.push(
                   <NoteRow
                     key={r}
@@ -314,7 +334,7 @@ function ChartGridInner({
                     rh={rh}
                     top={startY + r * rh}
                     rowMap={rowMap}
-                    previewCol={isPreviewBlock && previewType ? preview!.col : undefined}
+                    previewCol={blockPreviewTypes && previewType ? preview!.col : undefined}
                     previewType={previewType}
                   />
                 )

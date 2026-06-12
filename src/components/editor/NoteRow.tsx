@@ -61,8 +61,8 @@ function ArrowCellFill({ type, col, skin, ghost }: { type: CellType | undefined;
     return (
       <img
         src={`${base}/${dir}-Hold-BottomCap.png`}
-        className={`absolute left-0 top-0 ${opacity} pointer-events-none`}
-        style={{ width: COLUMN_WIDTH, height: COLUMN_WIDTH }}
+        className={`absolute left-0 ${opacity} pointer-events-none`}
+        style={{ width: COLUMN_WIDTH, height: COLUMN_WIDTH, top: 0 }}
         draggable={false}
       />
     )
