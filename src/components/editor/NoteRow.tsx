@@ -4,6 +4,72 @@ import type { Block } from '@/types/chart'
 
 export type CellType = 'tap' | 'hold-start' | 'hold-body' | 'hold-end'
 
+const DIRECTIONS = ['DownLeft', 'UpLeft', 'Center', 'UpRight', 'DownRight']
+
+function ArrowCellFill({ type, col, skin, ghost }: { type: CellType | undefined; col: number; skin: string; ghost?: boolean }) {
+  if (!type) return null
+  const dir = DIRECTIONS[col % 5]
+  const base = `/skin/${skin}`
+  const opacity = ghost ? 'opacity-50' : ''
+
+  if (type === 'tap') {
+    return (
+      <img
+        src={`${base}/${dir}-Tap-Note.png`}
+        className={`absolute left-0 ${opacity} pointer-events-none`}
+        style={{ width: COLUMN_WIDTH, height: COLUMN_WIDTH, top: 0, transform: 'translateY(-50%)' }}
+        draggable={false}
+      />
+    )
+  }
+  if (type === 'hold-start') {
+    return (
+      <>
+        <div
+          className={`absolute left-0 ${opacity} pointer-events-none`}
+          style={{
+            top: 0,
+            bottom: 0,
+            width: COLUMN_WIDTH,
+            backgroundImage: `url(${base}/${dir}-Hold-Body.png)`,
+            backgroundSize: `${COLUMN_WIDTH}px auto`,
+            backgroundRepeat: 'repeat-y',
+          }}
+        />
+        <img
+          src={`${base}/${dir}-Tap-Note.png`}
+          className={`absolute left-0 ${opacity} pointer-events-none`}
+          style={{ width: COLUMN_WIDTH, height: COLUMN_WIDTH, top: 0, transform: 'translateY(-50%)', zIndex: 1 }}
+          draggable={false}
+        />
+      </>
+    )
+  }
+  if (type === 'hold-body') {
+    return (
+      <div
+        className={`absolute inset-0 ${opacity} pointer-events-none`}
+        style={{
+          backgroundImage: `url(${base}/${dir}-Hold-Body.png)`,
+          backgroundSize: `${COLUMN_WIDTH}px auto`,
+          backgroundRepeat: 'repeat-y',
+        }}
+      />
+    )
+  }
+  if (type === 'hold-end') {
+    return (
+      <img
+        src={`${base}/${dir}-Hold-BottomCap.png`}
+        className={`absolute left-0 top-0 ${opacity} pointer-events-none`}
+        style={{ width: COLUMN_WIDTH, height: COLUMN_WIDTH }}
+        draggable={false}
+      />
+    )
+  }
+  return null
+}
+
 interface Props {
   row: number
   block: Block
@@ -45,6 +111,7 @@ export function NoteRow({ row, block, cols, rh, top, rowMap, previewCol, preview
   const cells = rowMap.get(row)
   const lineClass = getLineClass(row, block)
   const showColumnDividers = useEditorStore(s => s.showColumnDividers)
+  const activeSkin = useEditorStore(s => s.activeSkin)
 
   return (
     <div
@@ -60,11 +127,17 @@ export function NoteRow({ row, block, cols, rh, top, rowMap, previewCol, preview
             className={`relative flex-shrink-0 ${showColumnDividers && col < cols - 1 ? 'border-r border-grid-beat' : ''}`}
             style={{ width: COLUMN_WIDTH, height: '100%' }}
           >
-            {realType
-              ? <CellFill type={realType} />
-              : isPreviewCol
-                ? <CellFill type={previewType} ghost />
-                : null
+            {activeSkin !== 'blocks'
+              ? realType
+                ? <ArrowCellFill type={realType} col={col} skin={activeSkin} />
+                : isPreviewCol
+                  ? <ArrowCellFill type={previewType} col={col} skin={activeSkin} ghost />
+                  : null
+              : realType
+                ? <CellFill type={realType} />
+                : isPreviewCol
+                  ? <CellFill type={previewType} ghost />
+                  : null
             }
           </div>
         )

@@ -17,7 +17,7 @@ export function ChartEditor() {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement
-      const inInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA'
+      const inInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT'
 
       if (e.code === 'Space' && !inInput) {
         e.preventDefault()

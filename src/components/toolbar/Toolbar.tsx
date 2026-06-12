@@ -56,7 +56,7 @@ function TimeDisplay({ currentTime, totalMs }: TimeDisplayProps) {
 
 export function Toolbar() {
   const { tabs, activeTabId, addTab, setTabScale, setTabPlaybackRate } = useTabsStore()
-  const { isPlaying, currentTime, setPlaying, setCurrentTime, showColumnDividers, setShowColumnDividers } = useEditorStore()
+  const { isPlaying, currentTime, setPlaying, setCurrentTime, showColumnDividers, setShowColumnDividers, activeSkin, setActiveSkin } = useEditorStore()
   const activeTab = tabs.find(t => t.id === activeTabId)
 
   const totalMs = useMemo(() => {
@@ -228,10 +228,20 @@ export function Toolbar() {
           type="checkbox"
           checked={showColumnDividers}
           onChange={e => setShowColumnDividers(e.target.checked)}
+          onMouseUp={e => e.currentTarget.blur()}
           className="accent-primary"
         />
         <span className="text-xs text-muted-foreground">Col lines</span>
       </label>
+
+      <select
+        value={activeSkin}
+        onChange={e => { setActiveSkin(e.target.value); e.currentTarget.blur() }}
+        className="text-xs bg-secondary text-secondary-foreground rounded px-1 py-0.5 border-0 outline-none cursor-pointer"
+      >
+        <option value="basic">Skin: basic</option>
+        <option value="blocks">Skin: blocks</option>
+      </select>
 
       <div className="ml-auto flex items-center gap-2">
         <button
