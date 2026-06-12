@@ -1,6 +1,6 @@
 import { useRef, useState, useCallback } from 'react'
 import { useTabsStore } from '@/store/tabsStore'
-import { COLUMN_WIDTH, CURSOR_LINE_Y, LABEL_WIDTH } from '@/utils/geometry'
+import { COLUMN_WIDTH, CURSOR_LINE_Y } from '@/utils/geometry'
 import type { BlockLayout } from '@/utils/geometry'
 import type { Note, Block } from '@/types/chart'
 
@@ -45,7 +45,7 @@ export function useEditor(
     const el = scrollRef.current
     if (!el) return null
     const rect = el.getBoundingClientRect()
-    const px = clientX - rect.left - LABEL_WIDTH
+    const px = clientX - rect.left
     const py = clientY - rect.top + el.scrollTop - CURSOR_LINE_Y
 
     const col = Math.floor(px / COLUMN_WIDTH)

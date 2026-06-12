@@ -1,14 +1,72 @@
+import { useState, useEffect, useMemo } from 'react'
 import { audioEngine } from '@/services/audioEngine'
 import { useTabsStore } from '@/store/tabsStore'
 import { useEditorStore } from '@/store/editorStore'
 import { parseUcs } from '@/services/ucsParser'
 import { serializeToUcs } from '@/services/ucsSerializer'
 import { useAudio } from '@/hooks/useAudio'
+import { computeBlockOffsets } from '@/utils/timing'
+import { blockRowCount } from '@/utils/geometry'
+
+function formatMs(ms: number): string {
+  const total = Math.max(0, Math.round(ms))
+  const m = Math.floor(total / 60000)
+  const s = Math.floor((total % 60000) / 1000)
+  const milli = total % 1000
+  return `${m}:${String(s).padStart(2, '0')}.${String(milli).padStart(3, '0')}`
+}
+
+interface TimeDisplayProps {
+  currentTime: number
+  totalMs: number
+}
+
+function TimeDisplay({ currentTime, totalMs }: TimeDisplayProps) {
+  const [liveMs, setLiveMs] = useState(currentTime)
+
+  // Single persistent RAF loop — checks audioEngine.isPlaying() directly
+  useEffect(() => {
+    let rafId: number
+    const tick = () => {
+      if (audioEngine.isPlaying()) {
+        setLiveMs(audioEngine.getCurrentMs())
+      }
+      rafId = requestAnimationFrame(tick)
+    }
+    rafId = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(rafId)
+  }, [])
+
+  // Sync display when scrubbing / seeking while paused
+  useEffect(() => {
+    if (!audioEngine.isPlaying()) {
+      setLiveMs(currentTime)
+    }
+  }, [currentTime])
+
+  return (
+    <span
+      data-testid="time-display"
+      className="text-xs font-mono text-muted-foreground tabular-nums whitespace-nowrap shrink-0"
+    >
+      {formatMs(liveMs)} / {formatMs(totalMs)}
+    </span>
+  )
+}
 
 export function Toolbar() {
   const { tabs, activeTabId, addTab, setTabScale, setTabPlaybackRate } = useTabsStore()
   const { isPlaying, currentTime, setPlaying, setCurrentTime, showColumnDividers, setShowColumnDividers } = useEditorStore()
   const activeTab = tabs.find(t => t.id === activeTabId)
+
+  const totalMs = useMemo(() => {
+    if (!activeTab) return 0
+    const blocks = activeTab.chart.blocks
+    const offsets = computeBlockOffsets(blocks)
+    if (offsets.length === 0) return 0
+    const last = offsets[offsets.length - 1]
+    return last.startMs + blockRowCount(blocks[blocks.length - 1]) * last.msPerRow
+  }, [activeTab?.chart.blocks])
   const { openAudio, audioFileName } = useAudio()
   const scale = activeTab?.scale ?? 3
   const playbackRate = activeTab?.playbackRate ?? 1.0
@@ -128,6 +186,8 @@ export function Toolbar() {
           </svg>
         )}
       </button>
+
+      <TimeDisplay currentTime={currentTime} totalMs={totalMs} />
 
       <div className="flex items-center gap-2">
         <span className="text-muted-foreground text-xs">Scale</span>

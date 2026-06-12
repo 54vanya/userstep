@@ -1,4 +1,4 @@
-import { useRef, useState, useMemo, useEffect, useLayoutEffect } from 'react'
+import { useRef, useState, useMemo, useEffect, useLayoutEffect, useCallback } from 'react'
 import { useTabsStore } from '@/store/tabsStore'
 import { useEditorStore } from '@/store/editorStore'
 import {
@@ -8,14 +8,16 @@ import {
   BLOCK_DIVIDER_HEIGHT,
   COLUMN_WIDTH,
   CURSOR_LINE_Y,
-  LABEL_WIDTH,
+  RAIL_WIDTH,
 } from '@/utils/geometry'
 import type { BlockLayout } from '@/utils/geometry'
+import { useChart } from '@/hooks/useChart'
 import { useEditor } from '@/hooks/useEditor'
 import { usePlayback } from '@/hooks/usePlayback'
 import { computeBlockOffsets, msToScrollY, scrollYToMs } from '@/utils/timing'
 import { ColumnHeaders } from './ColumnHeaders'
-import { BlockLabels } from './BlockLabels'
+import { BlockRail } from './BlockRail'
+import { BlockSettingsPopup } from './BlockSettingsPopup'
 import { NoteRow, type CellType } from './NoteRow'
 import { BlockDivider } from './BlockDivider'
 import { Cursor } from './Cursor'
@@ -126,7 +128,32 @@ function ChartGridInner({
 }: InnerProps) {
   const { tabs } = useTabsStore()
   const { isPlaying, currentTime, setCurrentTime } = useEditorStore()
+  const { addBlock } = useChart()
   const activeTab = tabs.find(t => t.id === activeTabId)
+
+  const [openBlockId, setOpenBlockId] = useState<string | null>(null)
+  const [popupPos, setPopupPos] = useState<{ top: number; left: number; editorTop: number; editorBottom: number }>({ top: 0, left: 0, editorTop: 0, editorBottom: 0 })
+
+  const handleRailBlockClick = useCallback((blockId: string) => {
+    if (openBlockId === blockId) {
+      setOpenBlockId(null)
+      return
+    }
+    setOpenBlockId(blockId)
+    const scrollEl = scrollRef.current
+    if (!scrollEl) return
+    const rect = scrollEl.getBoundingClientRect()
+    const layout = blockLayouts.find(l => l.block.id === blockId)
+    if (!layout) return
+    const blockScreenTop = rect.top + CURSOR_LINE_Y + layout.startY - scrollEl.scrollTop
+    const POPUP_W = 224
+    const railRight = rect.left + cols * COLUMN_WIDTH + RAIL_WIDTH - scrollEl.scrollLeft
+    let left = railRight + 8
+    if (left + POPUP_W > window.innerWidth - 8) {
+      left = railRight - POPUP_W - 8
+    }
+    setPopupPos({ top: blockScreenTop, left: Math.max(8, left), editorTop: rect.top, editorBottom: rect.bottom })
+  }, [openBlockId, blockLayouts, scrollRef, cols])
 
   const prevChartIdRef = useRef<string | undefined>(activeTab?.chart.id)
   const prevTabIdRef = useRef<string | null>(activeTabId)
@@ -164,7 +191,7 @@ function ChartGridInner({
     const hl = highlightRef.current
     if (!el || !hl) return
     const rect = el.getBoundingClientRect()
-    const x = e.clientX - rect.left - LABEL_WIDTH
+    const x = e.clientX - rect.left
     const chartY = e.clientY - rect.top + el.scrollTop - CURSOR_LINE_Y
     const col = Math.floor(x / COLUMN_WIDTH)
     if (col < 0 || col >= cols) { hl.style.display = 'none'; return }
@@ -227,11 +254,15 @@ function ChartGridInner({
 
   const notesWidth = cols * COLUMN_WIDTH
 
+  const openBlockIndex = openBlockId
+    ? blockLayouts.findIndex(l => l.block.id === openBlockId)
+    : -1
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="flex shrink-0">
-        <div className="shrink-0 border-b border-r border-grid-beat bg-card" style={{ width: LABEL_WIDTH, height: 32 }} />
         <ColumnHeaders cols={cols} />
+        <div className="shrink-0 border-b border-l border-grid-beat bg-card" style={{ width: RAIL_WIDTH, height: 32 }} />
       </div>
       <div
         ref={scrollRef}
@@ -248,10 +279,9 @@ function ChartGridInner({
       >
         <Cursor />
         <div style={{ height: CURSOR_LINE_Y, flexShrink: 0 }} />
-        <div style={{ position: 'relative', height: totalHeight, width: LABEL_WIDTH + notesWidth }}>
-          <BlockLabels blockLayouts={blockLayouts} totalHeight={totalHeight} />
+        <div style={{ position: 'relative', height: totalHeight, width: notesWidth + RAIL_WIDTH }}>
           <div
-            style={{ position: 'absolute', left: LABEL_WIDTH, top: 0, width: notesWidth, height: totalHeight }}
+            style={{ position: 'absolute', left: 0, top: 0, width: notesWidth, height: totalHeight }}
           >
             <div
               ref={highlightRef}
@@ -298,9 +328,27 @@ function ChartGridInner({
               )
             })}
           </div>
+          <BlockRail
+            blockLayouts={blockLayouts}
+            totalHeight={totalHeight}
+            openBlockId={openBlockId}
+            onBlockClick={handleRailBlockClick}
+            onAddBlock={addBlock}
+          />
         </div>
         <div style={{ height: Math.max(0, containerH - CURSOR_LINE_Y), flexShrink: 0 }} />
       </div>
+      {openBlockId !== null && openBlockIndex >= 0 && (
+        <BlockSettingsPopup
+          blockId={openBlockId}
+          index={openBlockIndex}
+          top={popupPos.top}
+          left={popupPos.left}
+          editorTop={popupPos.editorTop}
+          editorBottom={popupPos.editorBottom}
+          onClose={() => setOpenBlockId(null)}
+        />
+      )}
     </div>
   )
 }

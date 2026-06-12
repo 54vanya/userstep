@@ -57,7 +57,7 @@ export function useChart() {
       delay: 0,
       beat: ref?.beat ?? 4,
       split: ref?.split ?? 4,
-      measures: 4,
+      measures: 1,
       notes: [],
     }
     const blocks = [...chart.blocks.slice(0, idx + 1), newBlock, ...chart.blocks.slice(idx + 1)]
