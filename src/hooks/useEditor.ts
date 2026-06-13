@@ -66,6 +66,9 @@ export function useEditor(
   scrollRef: React.RefObject<HTMLDivElement | null>,
   activeTabId: string | null,
   cols: number,
+  // Во время playback scrollTop заморожен, а слой двигается transform'ом — берём
+  // фактическую позиция воспроизведения, иначе hit-test промахивается.
+  scrollOffset: () => number,
 ) {
   const { tabs, updateChart } = useTabsStore()
   const activeTab = tabs.find(t => t.id === activeTabId)
@@ -78,7 +81,7 @@ export function useEditor(
     if (!el) return null
     const rect = el.getBoundingClientRect()
     const px = clientX - rect.left
-    const py = clientY - rect.top + el.scrollTop - CURSOR_LINE_Y
+    const py = clientY - rect.top + scrollOffset() - CURSOR_LINE_Y
 
     const col = Math.floor(px / COLUMN_WIDTH)
     if (col < 0 || col >= cols) return null
@@ -92,7 +95,7 @@ export function useEditor(
       }
     }
     return null
-  }, [blockLayouts, scrollRef, cols])
+  }, [blockLayouts, scrollRef, cols, scrollOffset])
 
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     if (e.button !== 0) return
@@ -122,7 +125,7 @@ export function useEditor(
     if (!el) return
 
     const rect = el.getBoundingClientRect()
-    const py = e.clientY - rect.top + el.scrollTop - CURSOR_LINE_Y
+    const py = e.clientY - rect.top + scrollOffset() - CURSOR_LINE_Y
 
     const startLayout = blockLayouts.find(l => l.block.id === drag.blockId)
     if (!startLayout) return
@@ -152,8 +155,6 @@ export function useEditor(
       return
     }
 
-    const startIdx = blockLayouts.indexOf(startLayout)
-    const endIdx = blockLayouts.indexOf(endLayout)
     const isSameBlock = endLayout.block.id === drag.blockId
     const hasExtent = !isSameBlock || endRow > drag.startRow
 
@@ -164,7 +165,7 @@ export function useEditor(
     } else {
       setPreview(null)
     }
-  }, [blockLayouts, scrollRef])
+  }, [blockLayouts, scrollRef, scrollOffset])
 
   const commit = useCallback(() => {
     const drag = dragRef.current

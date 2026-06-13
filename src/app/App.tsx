@@ -2,6 +2,8 @@ import { TabBar } from '@/components/tabs/TabBar'
 import { Toolbar } from '@/components/toolbar/Toolbar'
 import { Sidebar } from '@/components/sidebar/Sidebar'
 import { ChartEditor } from '@/components/editor/ChartEditor'
+import { FpsMeter } from '@/components/FpsMeter'
+import { MenuBar } from '@/components/menu/MenuBar'
 import { useTabsStore } from '@/store/tabsStore'
 import { useEditorStore } from '@/store/editorStore'
 import { audioEngine } from '@/services/audioEngine'
@@ -13,9 +15,11 @@ export function App() {
   const activeTab = tabs.find(t => t.id === activeTabId)
   const showSidebar = !!activeTab && !activeTab.isBlank
   const { needRefresh, update } = usePwaUpdate()
+  const showFps = useEditorStore(s => s.showFps)
 
   return (
     <div className="flex flex-col h-full">
+      {showFps && <FpsMeter />}
       {needRefresh && (
         <div className="flex items-center justify-between px-4 py-2 bg-primary text-primary-foreground text-sm shrink-0">
           <span>New version available</span>
@@ -27,7 +31,10 @@ export function App() {
           </button>
         </div>
       )}
-      <TabBar />
+      <div className="flex items-stretch shrink-0">
+        <MenuBar />
+        <TabBar />
+      </div>
       {tabs.length > 0 ? (
         <>
           <Toolbar />

@@ -95,6 +95,64 @@
     }
   }
 
+  /* Явный выбор темы перебивает системный медиа-запрос (выше специфичность). */
+  :root.dark {
+    --background: 0 0% 4%;
+    --foreground: 0 0% 90%;
+    --card: 0 0% 7%;
+    --card-foreground: 0 0% 90%;
+    --popover: 0 0% 7%;
+    --popover-foreground: 0 0% 90%;
+    --primary: 262 84% 58%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 12%;
+    --secondary-foreground: 0 0% 80%;
+    --muted: 0 0% 12%;
+    --muted-foreground: 0 0% 55%;
+    --accent: 0 0% 16%;
+    --accent-foreground: 0 0% 90%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 16%;
+    --input: 0 0% 16%;
+    --ring: 262 84% 58%;
+
+    --grid-bg: 0 0% 6%;
+    --grid-sub: 0 0% 17%;
+    --grid-beat: 0 0% 28%;
+    --grid-measure: 0 0% 43%;
+  }
+
+  :root.light {
+    --background: 0 0% 98%;
+    --foreground: 0 0% 10%;
+    --card: 0 0% 95%;
+    --card-foreground: 0 0% 10%;
+    --popover: 0 0% 95%;
+    --popover-foreground: 0 0% 10%;
+    --primary: 262 84% 52%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 90%;
+    --secondary-foreground: 0 0% 20%;
+    --muted: 0 0% 90%;
+    --muted-foreground: 0 0% 45%;
+    --accent: 0 0% 84%;
+    --accent-foreground: 0 0% 10%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 82%;
+    --input: 0 0% 82%;
+    --ring: 262 84% 52%;
+
+    --grid-bg: 0 0% 100%;
+    --grid-sub: 0 0% 87%;
+    --grid-beat: 0 0% 75%;
+    --grid-measure: 0 0% 60%;
+  }
+
+  :root.dark .grid-cell-hover { background-color: rgba(255, 255, 255, 0.30); }
+  :root.light .grid-cell-hover { background-color: rgba(0, 0, 0, 0.12); }
+
   * {
     border-color: hsl(var(--border));
     box-sizing: border-box;

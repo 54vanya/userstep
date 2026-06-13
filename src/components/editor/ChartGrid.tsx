@@ -18,51 +18,9 @@ import { computeBlockOffsets, msToScrollY, scrollYToMs } from '@/utils/timing'
 import { ColumnHeaders } from './ColumnHeaders'
 import { BlockRail } from './BlockRail'
 import { BlockSettingsPopup } from './BlockSettingsPopup'
-import { NoteRow, type CellType } from './NoteRow'
-import { BlockDivider } from './BlockDivider'
+import { BlockLayer } from './BlockLayer'
 import { Cursor } from './Cursor'
-import type { Block } from '@/types/chart'
-
-function buildRowMap(block: Block): Map<number, Map<number, CellType>> {
-  const map = new Map<number, Map<number, CellType>>()
-  for (const note of block.notes) {
-    if (note.type === 'tap') {
-      if (!map.has(note.row)) map.set(note.row, new Map())
-      map.get(note.row)!.set(note.col, 'tap')
-    } else if (note.type === 'hold') {
-      const endRow = note.endRow ?? note.row
-      for (let r = note.row; r <= endRow; r++) {
-        if (!map.has(r)) map.set(r, new Map())
-        const isStart = r === note.row && !note.continued
-        const isEnd = r === endRow && !note.continues
-        const t: CellType = isStart ? 'hold-start' : isEnd ? 'hold-end' : 'hold-body'
-        map.get(r)!.set(note.col, t)
-      }
-    }
-  }
-  return map
-}
-
-function buildPreviewTypes(
-  startRow: number,
-  endRow: number,
-  continued = false,
-  continues = false,
-): Map<number, CellType> {
-  const map = new Map<number, CellType>()
-  if (startRow === endRow && !continued && !continues) {
-    map.set(startRow, 'tap')
-  } else {
-    for (let r = startRow; r <= endRow; r++) {
-      const isStart = r === startRow && !continued
-      const isEnd = r === endRow && !continues
-      map.set(r, isStart ? 'hold-start' : isEnd ? 'hold-end' : 'hold-body')
-    }
-  }
-  return map
-}
-
-const BUFFER_PX = 300
+import type { Note } from '@/types/chart'
 
 export function ChartGrid() {
   const { tabs, activeTabId } = useTabsStore()
@@ -70,7 +28,6 @@ export function ChartGrid() {
   const scale = activeTab?.scale ?? 3
 
   const scrollRef = useRef<HTMLDivElement>(null)
-  const [scrollTop, setScrollTop] = useState(0)
   const [containerH, setContainerH] = useState(600)
 
   useEffect(() => {
@@ -103,12 +60,10 @@ export function ChartGrid() {
     <ChartGridInner
       blockLayouts={blockLayouts}
       scrollRef={scrollRef}
-      scrollTop={scrollTop}
       containerH={containerH}
       cols={cols}
       scale={scale}
       activeTabId={activeTabId}
-      onScroll={setScrollTop}
     />
   )
 }
@@ -116,27 +71,27 @@ export function ChartGrid() {
 interface InnerProps {
   blockLayouts: BlockLayout[]
   scrollRef: React.RefObject<HTMLDivElement | null>
-  scrollTop: number
   containerH: number
   cols: number
   scale: number
   activeTabId: string | null
-  onScroll: (y: number) => void
 }
 
 function ChartGridInner({
   blockLayouts,
   scrollRef,
-  scrollTop,
   containerH,
   cols,
   scale,
   activeTabId,
-  onScroll,
 }: InnerProps) {
   const { tabs } = useTabsStore()
   const { isPlaying, currentTime, setCurrentTime } = useEditorStore()
   const { addBlock } = useChart()
+  // Стабильная ссылка для BlockRail (иначе memo бесполезен — addBlock новый каждый рендер).
+  const addBlockRef = useRef(addBlock)
+  addBlockRef.current = addBlock
+  const stableAddBlock = useCallback(() => addBlockRef.current(), [])
   const activeTab = tabs.find(t => t.id === activeTabId)
 
   const [openBlockId, setOpenBlockId] = useState<string | null>(null)
@@ -163,24 +118,36 @@ function ChartGridInner({
     setPopupPos({ top: blockScreenTop, left: Math.max(8, left), editorTop: rect.top, editorBottom: rect.bottom })
   }, [openBlockId, blockLayouts, scrollRef, cols])
 
+  // Слой, который во время playback двигается transform'ом (вместо scrollTop).
+  const contentRef = useRef<HTMLDivElement>(null)
+  // Текущая позиция воспроизведения (px чарта); scrollTop при playback заморожен.
+  const playbackYRef = useRef(0)
+
+  // Восстановление скролла по currentTime при смене чарта: переключение вкладки
+  // (currentTime уже свопнут в сторе на время этой вкладки) или импорт в текущую.
   const prevChartIdRef = useRef<string | undefined>(activeTab?.chart.id)
-  const prevTabIdRef = useRef<string | null>(activeTabId)
   useLayoutEffect(() => {
     const prevId = prevChartIdRef.current
-    const prevTabId = prevTabIdRef.current
     const newId = activeTab?.chart.id
     prevChartIdRef.current = newId
-    prevTabIdRef.current = activeTabId
-    // Only restore scroll when chart changed within the same tab (import), not on tab switch
-    if (prevId === newId || prevTabId !== activeTabId || !scrollRef.current || blockLayouts.length === 0) return
+    if (prevId === newId || !scrollRef.current || blockLayouts.length === 0) return
     const offsets = computeBlockOffsets(blockLayouts.map(l => l.block))
     const y = msToScrollY(currentTime, offsets, blockLayouts)
     scrollRef.current.scrollTop = y
-    onScroll(y)
+    // Чтобы возможный cleanup playback-цикла не вернул scrollTop на позицию
+    // прошлой вкладки — синхронизируем якорь.
+    playbackYRef.current = y
   }, [activeTab?.chart.id, activeTabId, blockLayouts])
 
   const isPlayingRef = useRef(isPlaying)
   useEffect(() => { isPlayingRef.current = isPlaying }, [isPlaying])
+
+  // Эффективный скролл-офсет для перевода экранных координат в координаты чарта:
+  // при playback — живая позиция воспроизведения, иначе — нативный scrollTop.
+  const scrollOffset = useCallback(
+    () => (isPlayingRef.current ? playbackYRef.current : scrollRef.current?.scrollTop ?? 0),
+    [scrollRef],
+  )
 
   const prevScaleRef = useRef(scale)
   useLayoutEffect(() => {
@@ -189,7 +156,6 @@ function ChartGridInner({
     if (prevScale === scale || !scrollRef.current || isPlayingRef.current) return
     const newScrollTop = scrollRef.current.scrollTop * (scale / prevScale)
     scrollRef.current.scrollTop = newScrollTop
-    onScroll(newScrollTop)
   }, [scale])
 
   const highlightRef = useRef<HTMLDivElement>(null)
@@ -200,7 +166,7 @@ function ChartGridInner({
     if (!el || !hl) return
     const rect = el.getBoundingClientRect()
     const x = e.clientX - rect.left
-    const chartY = e.clientY - rect.top + el.scrollTop - CURSOR_LINE_Y
+    const chartY = e.clientY - rect.top + scrollOffset() - CURSOR_LINE_Y
     const col = Math.floor(x / COLUMN_WIDTH)
     if (col < 0 || col >= cols) { hl.style.display = 'none'; return }
     for (const layout of blockLayouts) {
@@ -223,31 +189,24 @@ function ChartGridInner({
   }
 
   const blocks = useMemo(() => blockLayouts.map(l => l.block), [blockLayouts])
-  usePlayback(blocks, blockLayouts, scrollRef)
+  usePlayback(blocks, blockLayouts, scrollRef, { contentRef, playbackYRef })
 
-  const handleScroll = (scrollTop: number) => {
-    onScroll(scrollTop)
-    if (!isPlaying) {
-      const offsets = computeBlockOffsets(blocks)
-      setCurrentTime(scrollYToMs(scrollTop, offsets, blockLayouts))
-    }
+  // Во время playback scrollTop заморожен, нативные scroll-события не приходят —
+  // обрабатываем только ручной скролл/скраб (синхронизируем currentTime).
+  const handleScroll = (newScrollTop: number) => {
+    if (isPlaying) return
+    const offsets = computeBlockOffsets(blocks)
+    setCurrentTime(scrollYToMs(newScrollTop, offsets, blockLayouts))
   }
 
   const { onPointerDown, onPointerMove, onPointerUp, onPointerCancel, preview } =
-    useEditor(blockLayouts, scrollRef, activeTabId, cols)
+    useEditor(blockLayouts, scrollRef, activeTabId, cols, scrollOffset)
 
-  const rowMaps = useMemo(() => {
-    const maps = new Map<string, Map<number, Map<number, CellType>>>()
-    if (!activeTab) return maps
-    for (const block of activeTab.chart.blocks) {
-      maps.set(block.id, buildRowMap(block))
-    }
-    return maps
-  }, [activeTab?.chart.blocks])
-
-  const previewTypesByBlock = useMemo(() => {
+  // Превью растягивающегося холда → синтетическая нота на каждый затронутый блок
+  // (включая кросс-блочные части через continued/continues). Не зависит от scroll.
+  const previewNotesByBlock = useMemo(() => {
     if (!preview) return null
-    const result = new Map<string, Map<number, CellType>>()
+    const result = new Map<string, Note>()
     const startIdx = blockLayouts.findIndex(l => l.block.id === preview.startBlockId)
     const endIdx = blockLayouts.findIndex(l => l.block.id === preview.endBlockId)
     for (let i = startIdx; i <= endIdx; i++) {
@@ -257,7 +216,12 @@ function ChartGridInner({
       const isLast = i === endIdx
       const startR = isFirst ? preview.startRow : 0
       const endR = isLast ? preview.endRow : layout.totalRows - 1
-      result.set(layout.block.id, buildPreviewTypes(startR, endR, !isFirst, !isLast))
+      const continued = !isFirst
+      const continues = !isLast
+      const note: Note = startR === endR && !continued && !continues
+        ? { row: startR, col: preview.col, type: 'tap' }
+        : { row: startR, col: preview.col, type: 'hold', endRow: endR, continued, continues }
+      result.set(layout.block.id, note)
     }
     return result
   }, [preview, blockLayouts])
@@ -268,9 +232,6 @@ function ChartGridInner({
     blockLayouts.length > 0
       ? blockLayouts[blockLayouts.length - 1].endY + BLOCK_DIVIDER_HEIGHT
       : 0
-
-  const visTop = scrollTop - CURSOR_LINE_Y - BUFFER_PX
-  const visBot = scrollTop - CURSOR_LINE_Y + containerH + BUFFER_PX
 
   const notesWidth = cols * COLUMN_WIDTH
 
@@ -299,7 +260,7 @@ function ChartGridInner({
       >
         <Cursor />
         <div style={{ height: CURSOR_LINE_Y, flexShrink: 0 }} />
-        <div style={{ position: 'relative', height: totalHeight, width: notesWidth + RAIL_WIDTH }}>
+        <div ref={contentRef} style={{ position: 'relative', height: totalHeight, width: notesWidth + RAIL_WIDTH }}>
           <div
             style={{ position: 'absolute', left: 0, top: 0, width: notesWidth, height: totalHeight }}
           >
@@ -314,46 +275,25 @@ function ChartGridInner({
                 zIndex: 2,
               }}
             />
-            {blockLayouts.map(({ block, startY, endY, rh, totalRows }) => {
-              if (endY + BLOCK_DIVIDER_HEIGHT < visTop || startY > visBot) return null
-
-              const rowMap = rowMaps.get(block.id)!
-              const firstRow = Math.max(0, Math.floor((visTop - startY) / rh))
-              const lastRow = Math.min(totalRows - 1, Math.ceil((visBot - startY) / rh))
-
-              const blockPreviewTypes = previewTypesByBlock?.get(block.id) ?? null
-              const rows: React.ReactNode[] = []
-              for (let r = firstRow; r <= lastRow; r++) {
-                const previewType = blockPreviewTypes?.get(r)
-                rows.push(
-                  <NoteRow
-                    key={r}
-                    row={r}
-                    block={block}
-                    cols={cols}
-                    rh={rh}
-                    top={startY + r * rh}
-                    rowMap={rowMap}
-                    previewCol={blockPreviewTypes && previewType ? preview!.col : undefined}
-                    previewType={previewType}
-                  />
-                )
-              }
-
-              return (
-                <div key={block.id}>
-                  {rows}
-                  <BlockDivider top={endY} cols={cols} />
-                </div>
-              )
-            })}
+            {blockLayouts.map(({ block, startY, endY, rh, totalRows }) => (
+              <BlockLayer
+                key={block.id}
+                block={block}
+                startY={startY}
+                rh={rh}
+                totalRows={totalRows}
+                height={endY - startY}
+                notesWidth={notesWidth}
+                previewNote={previewNotesByBlock?.get(block.id) ?? null}
+              />
+            ))}
           </div>
           <BlockRail
             blockLayouts={blockLayouts}
             totalHeight={totalHeight}
             openBlockId={openBlockId}
             onBlockClick={handleRailBlockClick}
-            onAddBlock={addBlock}
+            onAddBlock={stableAddBlock}
           />
         </div>
         <div style={{ height: Math.max(0, containerH - CURSOR_LINE_Y), flexShrink: 0 }} />

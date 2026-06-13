@@ -3,6 +3,22 @@ import { temporal } from 'zundo'
 import { v4 as uuidv4 } from 'uuid'
 import type { Chart, Tab } from '@/types/chart'
 import { saveSession, loadSession } from '@/services/sessionStorage'
+import { useEditorStore } from '@/store/editorStore'
+import { audioEngine } from '@/services/audioEngine'
+import { tabTimes } from '@/utils/tabTime'
+
+// Своп позиции воспроизведения при смене активной вкладки: сохраняем время
+// уходящей вкладки, грузим время входящей, останавливаем playback (аудио разное).
+function swapActiveTime(prevId: string | null, nextId: string | null, nextTime?: number) {
+  const ed = useEditorStore.getState()
+  // Во время playback живая позиция в audioEngine (editorStore.currentTime не
+  // обновляется покадрово), иначе — в editorStore.
+  const outgoing = audioEngine.isPlaying() ? audioEngine.getCurrentMs() : ed.currentTime
+  if (prevId) tabTimes.set(prevId, outgoing)
+  if (audioEngine.isPlaying()) audioEngine.pause()
+  ed.setPlaying(false)
+  ed.setCurrentTime(nextTime ?? (nextId ? tabTimes.get(nextId) ?? 0 : 0))
+}
 
 function makeEmptyChart(): Chart {
   return {
@@ -57,7 +73,7 @@ const _stored = loadSession()
 
 export const useTabsStore = create<TabsState>()(
   temporal(
-    (set) => ({
+    (set, get) => ({
       tabs: _stored?.tabs ?? [],
       activeTabId: _stored?.activeTabId ?? null,
 
@@ -73,6 +89,9 @@ export const useTabsStore = create<TabsState>()(
           playbackRate: 1.0,
           isBlank: chart === undefined,
         }
+        const initialTime = newChart.editorSettings?.currentTime ?? 0
+        tabTimes.set(tabId, initialTime)
+        swapActiveTime(get().activeTabId, tabId, initialTime)
         set(state => ({
           tabs: [...state.tabs, tab],
           activeTabId: tabId,
@@ -81,18 +100,25 @@ export const useTabsStore = create<TabsState>()(
       },
 
       closeTab: (tabId) => {
-        set(state => {
-          const idx = state.tabs.findIndex(t => t.id === tabId)
-          const newTabs = state.tabs.filter(t => t.id !== tabId)
-          let newActiveId = state.activeTabId
-          if (state.activeTabId === tabId) {
-            newActiveId = newTabs[Math.max(0, idx - 1)]?.id ?? newTabs[0]?.id ?? null
-          }
-          return { tabs: newTabs, activeTabId: newActiveId }
-        })
+        const state = get()
+        const idx = state.tabs.findIndex(t => t.id === tabId)
+        const newTabs = state.tabs.filter(t => t.id !== tabId)
+        let newActiveId = state.activeTabId
+        if (state.activeTabId === tabId) {
+          newActiveId = newTabs[Math.max(0, idx - 1)]?.id ?? newTabs[0]?.id ?? null
+          // Активная вкладка закрыта — грузим время новой активной (старую не сохраняем).
+          const ed = useEditorStore.getState()
+          if (audioEngine.isPlaying()) audioEngine.pause()
+          ed.setPlaying(false)
+          ed.setCurrentTime(newActiveId ? tabTimes.get(newActiveId) ?? 0 : 0)
+        }
+        tabTimes.delete(tabId)
+        set({ tabs: newTabs, activeTabId: newActiveId })
       },
 
       setActiveTab: (tabId) => {
+        if (get().activeTabId === tabId) return
+        swapActiveTime(get().activeTabId, tabId)
         set({ activeTabId: tabId })
       },
 

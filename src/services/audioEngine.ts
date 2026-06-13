@@ -74,6 +74,10 @@ class AudioEngine {
     return this._isPlaying
   }
 
+  getPlaybackRate(): number {
+    return this._playbackRate
+  }
+
   hasAudio(): boolean {
     return this.buffer !== null
   }

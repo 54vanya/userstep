@@ -6,7 +6,6 @@ import { serializeToUcs } from '../ucsSerializer'
 
 const cs266 = readFileSync(resolve(__dirname, '../../../fileExamples/CS266.ucs'), 'utf-8')
 const cs349 = readFileSync(resolve(__dirname, '../../../fileExamples/CS349.ucs'), 'utf-8')
-const cs677 = readFileSync(resolve(__dirname, '../../../fileExamples/CS677.ucs'), 'utf-8')
 
 // Normalize a UCS string for comparison: Unix line endings, trim trailing spaces per line
 function normalizeUcs(s: string): string {

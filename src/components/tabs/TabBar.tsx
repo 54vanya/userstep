@@ -6,7 +6,7 @@ export function TabBar() {
   const { tabs, activeTabId, addTab, closeTab, setActiveTab } = useTabsStore()
 
   return (
-    <div className="flex items-stretch border-b border-border bg-card h-9 overflow-x-auto shrink-0">
+    <div className="flex items-stretch border-b border-border bg-card h-9 overflow-x-auto flex-1 min-w-0">
       {tabs.map(tab => (
         <TabItem
           key={tab.id}

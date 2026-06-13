@@ -1,29 +1,34 @@
 import { create } from 'zustand'
+import { loadTheme, applyTheme, type Theme } from '@/utils/theme'
 
 interface EditorStore {
-  scrollY: number
   isPlaying: boolean
   currentTime: number
   showColumnDividers: boolean
   activeSkin: string
+  showFps: boolean
+  theme: Theme
 
-  setScrollY: (y: number) => void
   setPlaying: (playing: boolean) => void
   setCurrentTime: (ms: number) => void
   setShowColumnDividers: (show: boolean) => void
   setActiveSkin: (skin: string) => void
+  setShowFps: (show: boolean) => void
+  setTheme: (theme: Theme) => void
 }
 
 export const useEditorStore = create<EditorStore>((set) => ({
-  scrollY: 0,
   isPlaying: false,
   currentTime: 0,
   showColumnDividers: false,
   activeSkin: 'basic',
+  showFps: false,
+  theme: loadTheme(),
 
-  setScrollY: (scrollY) => set({ scrollY }),
   setPlaying: (isPlaying) => set({ isPlaying }),
   setCurrentTime: (currentTime) => set({ currentTime }),
   setShowColumnDividers: (showColumnDividers) => set({ showColumnDividers }),
   setActiveSkin: (activeSkin) => set({ activeSkin }),
+  setShowFps: (showFps) => set({ showFps }),
+  setTheme: (theme) => { applyTheme(theme); set({ theme }) },
 }))
