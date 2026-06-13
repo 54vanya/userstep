@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>конвейер: один способ за раз</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #111; color: #eee; font: 12px ui-monospace, monospace; overflow: hidden; }
+  #bar { position: fixed; top: 0; left: 0; right: 0; min-height: 30px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px;
+         padding: 5px 10px; background: #1c1c1c; border-bottom: 1px solid #444; z-index: 50; }
+  #bar .grp { display: flex; align-items: center; gap: 8px; }
+  #bar label { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+  #bar .sep { width: 1px; align-self: stretch; background: #444; }
+  #bar b { color: #9cf; }
+  #fps { margin-left: auto; }
+  #stage { position: absolute; inset: 0; top: 40px; overflow: hidden; }
+
+  /* контент шириной 5 колонок (200px), по центру */
+  .strip { position: absolute; left: 50%; margin-left: -100px; width: 200px; will-change: transform; display: none; }
+  .strip.active { display: block; }
+  .big   { height: 6000px; top: -3000px; }
+  .small { height: calc(100% + 360px); top: 0; }
+  .lin   { height: 36000px; top: 0; }   /* длинный конечный чарт, без перескоков */
+  .strip img { position: absolute; width: 40px; height: 40px; }
+  .hold-body { position: absolute; width: 40px; background-repeat: repeat-y; background-size: 40px auto; }
+  /* способ 7: canvas 2D на весь stage (рендер как в piuvisual) */
+  #cv7 { position: absolute; inset: 0; width: 100%; height: 100%; display: none; }
+  #cv7.active { display: block; }
+</style>
+</head>
+<body>
+<div id="bar">
+  <div class="grp">
+    способ:
+    <label><input type="radio" name="m" value="1" checked> 1 большой+rAF</label>
+    <label><input type="radio" name="m" value="2"> 2 малый+rAF</label>
+    <label><input type="radio" name="m" value="3"> 3 WAAPI</label>
+    <label><input type="radio" name="m" value="4"> 4 малый+rAF+снэп</label>
+    <label><input type="radio" name="m" value="5"> 5 линейно (без цикла)</label>
+    <label><input type="radio" name="m" value="6"> 6 frame-lock (шаг V/Гц)</label>
+    <label><input type="radio" name="m" value="7"> 7 canvas 2D (drawImage, как piuvisual)</label>
+  </div>
+  <div class="sep"></div>
+  <div class="grp">
+    скорость:
+    <label><input type="radio" name="v" value="150"> 150</label>
+    <label><input type="radio" name="v" value="300"> 300</label>
+    <label><input type="radio" name="v" value="450" checked> 450</label>
+    <label><input type="radio" name="v" value="900"> 900</label>
+    <span>px/с</span>
+  </div>
+  <span id="fps">measuring…</span>
+</div>
+<div id="stage">
+  <div class="strip big active" id="c1"></div>
+  <div class="strip small" id="c2"></div>
+  <div class="strip small" id="c3"></div>
+  <div class="strip small" id="c4"></div>
+  <div class="strip lin" id="c5"></div>
+  <div class="strip small" id="c6"></div>
+  <canvas id="cv7"></canvas>
+</div>
+<script>
+  const PERIOD = 360;
+  let V = 450;
+  let method = 1;
+  const t0 = performance.now();
+  const DIR = ['DownLeft', 'UpLeft', 'Center', 'UpRight', 'DownRight'];
+
+  const TAPS  = [ {y: 0, col: 0}, {y: 90, col: 4}, {y: 180, col: 1}, {y: 270, col: 3} ];
+  const HOLDS = [ {y: 40, col: 2, len: 220} ];
+
+  function makeTap(y, col) {
+    const img = document.createElement('img');
+    img.src = `/skin/basic/${DIR[col]}-Tap-Note.png`;
+    img.draggable = false;
+    img.style.left = (col * 40) + 'px';
+    img.style.top = (y - 20) + 'px';
+    return [img];
+  }
+  function makeHold(y, col, len) {
+    const dir = DIR[col], x = col * 40;
+    const body = document.createElement('div');
+    body.className = 'hold-body';
+    body.style.left = x + 'px'; body.style.top = y + 'px'; body.style.height = len + 'px';
+    body.style.backgroundImage = `url(/skin/basic/${dir}-Hold-Body.png)`;
+    const cap = document.createElement('img');
+    cap.src = `/skin/basic/${dir}-Hold-BottomCap.png`;
+    cap.draggable = false; cap.style.left = x + 'px'; cap.style.top = (y + len) + 'px';
+    const head = document.createElement('img');
+    head.src = `/skin/basic/${dir}-Tap-Note.png`;
+    head.draggable = false; head.style.left = x + 'px'; head.style.top = (y - 20) + 'px'; head.style.zIndex = '1';
+    return [body, cap, head];
+  }
+  function fill(el) {
+    const h = el.classList.contains('big') ? 6000
+            : el.classList.contains('lin') ? 36000
+            : el.clientHeight + PERIOD;
+    const frag = document.createDocumentFragment();
+    for (let base = 0; base < h + PERIOD; base += PERIOD) {
+      for (const t of TAPS) makeTap(base + t.y, t.col).forEach(n => frag.appendChild(n));
+      for (const hd of HOLDS) makeHold(base + hd.y, hd.col, hd.len).forEach(n => frag.appendChild(n));
+    }
+    el.appendChild(frag);
+  }
+
+  const cols = { 1: document.getElementById('c1'), 2: document.getElementById('c2'),
+                 3: document.getElementById('c3'), 4: document.getElementById('c4'),
+                 5: document.getElementById('c5'), 6: document.getElementById('c6') };
+  // временно показываем все, чтобы clientHeight был корректным при заполнении
+  Object.values(cols).forEach(el => { el.classList.add('active'); });
+  Object.values(cols).forEach(fill);
+  Object.values(cols).forEach(el => { if (el !== cols[1]) el.classList.remove('active'); });
+
+  // WAAPI для способа 3, по умолчанию на паузе
+  const anim = cols[3].animate(
+    [{ transform: 'translate3d(0,0,0)' }, { transform: 'translate3d(0,' + (-PERIOD) + 'px,0)' }],
+    { duration: PERIOD / V * 1000, iterations: Infinity, easing: 'linear' }
+  );
+  anim.pause();
+
+  // способ 7: canvas 2D — предзагрузка спрайтов + рендер drawImage каждый кадр
+  // (так рисует piuvisual: полная очистка + блиттинг, сабпиксельно, без снэпа).
+  const cv7 = document.getElementById('cv7');
+  const ctx7 = cv7.getContext('2d');
+  const TAPIMG = DIR.map(d => { const im = new Image(); im.src = `/skin/basic/${d}-Tap-Note.png`; return im; });
+  const HOLDBODY = new Image(); HOLDBODY.src = '/skin/basic/Center-Hold-Body.png';
+  const HOLDCAP = new Image(); HOLDCAP.src = '/skin/basic/Center-Hold-BottomCap.png';
+  function resizeCv7() {
+    const dpr = window.devicePixelRatio || 1;
+    cv7.width = cv7.clientWidth * dpr; cv7.height = cv7.clientHeight * dpr;
+    ctx7.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  window.addEventListener('resize', () => { if (method === 7) resizeCv7(); });
+  function drawCv7(now) {
+    const w = cv7.clientWidth, h = cv7.clientHeight;
+    const ox = (w - 200) / 2;
+    const off = ((now - t0) * V / 1000) % PERIOD;
+    ctx7.clearRect(0, 0, w, h);
+    for (let base = -PERIOD; base < h + PERIOD; base += PERIOD) {
+      for (const t of TAPS) {
+        const img = TAPIMG[t.col];
+        if (img.complete) ctx7.drawImage(img, ox + t.col * 40, base + t.y - off - 20, 40, 40);
+      }
+      for (const hd of HOLDS) {
+        const top = base + hd.y - off;
+        if (HOLDBODY.complete) for (let yy = 0; yy < hd.len; yy += 40) {
+          const seg = Math.min(40, hd.len - yy);
+          ctx7.drawImage(HOLDBODY, 0, 0, 40, seg, ox + hd.col * 40, top + yy, 40, seg);
+        }
+        if (HOLDCAP.complete) ctx7.drawImage(HOLDCAP, ox + hd.col * 40, top + hd.len, 40, 40);
+        if (TAPIMG[hd.col].complete) ctx7.drawImage(TAPIMG[hd.col], ox + hd.col * 40, top - 20, 40, 40);
+      }
+    }
+  }
+
+  function applyMethod() {
+    Object.entries(cols).forEach(([k, el]) => el.classList.toggle('active', +k === method));
+    cv7.classList.toggle('active', method === 7);
+    if (method === 7) resizeCv7();
+    if (method === 3) anim.play(); else anim.pause();
+  }
+
+  // оценка интервала кадра (медиана последних 60) — для frame-lock
+  const intervals = [];
+  function pushInterval(dt) { intervals.push(dt); if (intervals.length > 60) intervals.shift(); }
+  function refreshMs() {
+    if (!intervals.length) return 1000 / 60;
+    const s = [...intervals].sort((a, b) => a - b);
+    return s[s.length >> 1];
+  }
+
+  // единственный rAF для активного transform-способа (1,2,4,5,6)
+  let linStart = t0;
+  let pos6 = 0;   // накопленная позиция для frame-lock
+  function tick(now) {
+    if (method === 7) {
+      drawCv7(now);
+    } else if (method === 6) {
+      // привязка к кадрам: фикс. шаг V/Гц каждый кадр, без чтения настенных часов
+      pos6 += V * refreshMs() / 1000;
+      cols[6].style.transform = 'translate3d(0,' + (-(pos6 % PERIOD)) + 'px,0)';
+    } else if (method === 5) {
+      // линейно, без цикла: проматываем 36000px один раз, затем рестарт (один рывок в конце, не периодический)
+      const maxScroll = 36000 - document.getElementById('stage').clientHeight;
+      let y = (now - linStart) * V / 1000;
+      if (y > maxScroll) { linStart = now; y = 0; }
+      cols[5].style.transform = 'translate3d(0,' + (-y) + 'px,0)';
+    } else if (method !== 3) {
+      const el = cols[method];
+      let y = ((now - t0) * V / 1000) % PERIOD;
+      if (method === 4) y = Math.round(y);
+      el.style.transform = 'translate3d(0,' + (-y) + 'px,0)';
+    }
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+
+  document.querySelectorAll('input[name=m]').forEach(r => r.addEventListener('change', e => {
+    method = +e.target.value;
+    if (method === 5) { linStart = performance.now(); cols[5].style.transform = 'translate3d(0,0,0)'; }
+    if (method === 6) { pos6 = 0; cols[6].style.transform = 'translate3d(0,0,0)'; }
+    applyMethod();
+  }));
+  document.querySelectorAll('input[name=v]').forEach(r => r.addEventListener('change', e => {
+    V = +e.target.value;
+    anim.effect.updateTiming({ duration: PERIOD / V * 1000 });
+  }));
+
+  // счётчик кадров
+  const fpsEl = document.getElementById('fps');
+  let frames = 0, worst = 0, longF = 0, wStart = performance.now(), last = wStart;
+  function meter(now) {
+    const dt = now - last; last = now; frames++;
+    pushInterval(dt);
+    if (dt > worst) worst = dt;
+    const el = now - wStart;
+    if (el >= 500) {
+      fpsEl.textContent = Math.round(frames*1000/el) + ' fps · worst ' + (Math.round(worst*10)/10) + 'ms · long ' + longF;
+      frames = 0; worst = 0; longF = 0; wStart = now;
+    } else if (frames > 1 && dt > 1.6 * (el / frames)) longF++;
+    requestAnimationFrame(meter);
+  }
+  requestAnimationFrame(meter);
+</script>
+</body>
+</html>
