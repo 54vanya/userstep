@@ -117,8 +117,10 @@ export function MenuBar() {
   const {
     currentTime, setCurrentTime,
     showColumnDividers, setShowColumnDividers,
+    showRowLines, setShowRowLines,
     activeSkin, setActiveSkin,
     showFps, setShowFps,
+    playbackMode, setPlaybackMode,
     theme, setTheme,
   } = useEditorStore()
 
@@ -200,11 +202,18 @@ export function MenuBar() {
 
       <MenuButton label="View" id="view" open={open} setOpen={setOpen}>
         <Toggle on={showColumnDividers} onToggle={() => setShowColumnDividers(!showColumnDividers)}>Column lines</Toggle>
+        <Toggle on={showRowLines} onToggle={() => setShowRowLines(!showRowLines)}>Row lines</Toggle>
         <Toggle on={showFps} onToggle={() => setShowFps(!showFps)}>Show FPS</Toggle>
         <Separator />
         <SectionLabel>Skin</SectionLabel>
         <Radio on={activeSkin === 'basic'} onSelect={() => setActiveSkin('basic')}>Basic</Radio>
         <Radio on={activeSkin === 'blocks'} onSelect={() => setActiveSkin('blocks')}>Blocks</Radio>
+        <Separator />
+        <SectionLabel>Playback</SectionLabel>
+        <Radio on={playbackMode === 'snap'} onSelect={() => setPlaybackMode('snap')}>Pixel-snap (grid)</Radio>
+        <Radio on={playbackMode === 'smooth'} onSelect={() => setPlaybackMode('smooth')}>Smooth</Radio>
+        <Radio on={playbackMode === 'framelock'} onSelect={() => setPlaybackMode('framelock')}>Frame-lock</Radio>
+        <Radio on={playbackMode === 'raw'} onSelect={() => setPlaybackMode('raw')}>Raw audio</Radio>
         <Separator />
         <SectionLabel>Theme</SectionLabel>
         <Radio on={theme === 'system'} onSelect={() => setTheme('system')}>System</Radio>

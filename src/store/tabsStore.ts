@@ -71,6 +71,19 @@ interface TabsState {
 
 const _stored = loadSession()
 
+// Восстановление позиций воспроизведения из прошлой сессии: заполняем tabTimes
+// (источник правды при переключении вкладок) и сразу выставляем currentTime
+// активной вкладки, чтобы ChartGrid при первом маунте проскроллил на неё.
+// Бэкап-источник для старых сессий без `times` — chart.editorSettings.currentTime.
+if (_stored?.tabs) {
+  for (const t of _stored.tabs) {
+    tabTimes.set(t.id, _stored.times?.[t.id] ?? t.chart.editorSettings?.currentTime ?? 0)
+  }
+  if (_stored.activeTabId) {
+    useEditorStore.getState().setCurrentTime(tabTimes.get(_stored.activeTabId) ?? 0)
+  }
+}
+
 export const useTabsStore = create<TabsState>()(
   temporal(
     (set, get) => ({
@@ -208,8 +221,34 @@ export const useTabsStore = create<TabsState>()(
   )
 )
 
+// Сохранение сессии вместе с позициями вкладок. Живое время активной вкладки
+// (во время playback — из audioEngine, иначе — из editorStore) подмешиваем в
+// tabTimes прямо перед сериализацией, т.к. оно не хранится в tabsStore и обычная
+// подписка на изменения табов его не ловит.
+function flushSession(): void {
+  const { tabs, activeTabId } = useTabsStore.getState()
+  if (activeTabId) {
+    const ed = useEditorStore.getState()
+    const live = audioEngine.isPlaying() ? audioEngine.getCurrentMs() : ed.currentTime
+    tabTimes.set(activeTabId, live)
+  }
+  const times: Record<string, number> = {}
+  for (const t of tabs) times[t.id] = tabTimes.get(t.id) ?? 0
+  saveSession(tabs, activeTabId, times)
+}
+
 let _saveTimer: ReturnType<typeof setTimeout> | undefined
-useTabsStore.subscribe(state => {
+useTabsStore.subscribe(() => {
   clearTimeout(_saveTimer)
-  _saveTimer = setTimeout(() => saveSession(state.tabs, state.activeTabId), 500)
+  _saveTimer = setTimeout(flushSession, 500)
 })
+
+// Перезагрузка/закрытие/сворачивание вкладки браузера: дебаунс мог не успеть, а
+// время-онли изменения (скраб/пауза) вообще не триггерят подписку — поэтому
+// флашим синхронно на pagehide и при скрытии (надёжнее beforeunload в PWA/моб.).
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', flushSession)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushSession()
+  })
+}

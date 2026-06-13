@@ -5,23 +5,6 @@ import type { Block, Note } from '@/types/chart'
 
 const DIRECTIONS = ['DownLeft', 'UpLeft', 'Center', 'UpRight', 'DownRight']
 
-// Линии сетки одним фоном на блок (вместо построчных border-div). Три слоя
-// repeating-linear-gradient: measure поверх beat поверх sub (на совпадающих
-// позициях выигрывает верхний). Опционально вертикальные делители колонок.
-function buildGridBackground(block: Block, rh: number, showCols: boolean): string {
-  const line = (period: number, color: string, dir: 'bottom' | 'right') => {
-    const a = Math.max(0, period - 1)
-    return `repeating-linear-gradient(to ${dir}, transparent 0, transparent ${a}px, ${color} ${a}px, ${color} ${period}px)`
-  }
-  const layers = [
-    line(rh * block.split * block.beat, 'var(--color-grid-measure)', 'bottom'),
-    line(rh * block.split, 'var(--color-grid-beat)', 'bottom'),
-    line(rh, 'var(--color-grid-sub)', 'bottom'),
-  ]
-  if (showCols) layers.push(line(COLUMN_WIDTH, 'var(--color-grid-beat)', 'right'))
-  return layers.join(', ')
-}
-
 // Одна нота как спрайт (вместо построчных ячеек). Для холда — единый body на весь
 // пролёт + шапка/кэп по флагам continued/continues (включая кросс-блочные холды).
 function ImageSprite({ note, rh, totalRows, skin, ghost }: { note: Note; rh: number; totalRows: number; skin: string; ghost?: boolean }) {
@@ -120,16 +103,15 @@ interface Props {
   previewNote: Note | null
 }
 
-// Один блок: фон-сетка + все ноты. Мемоизирован и не зависит от прокрутки —
-// во время playback не ре-рендерится вовсе (двигается только transform родителя).
+// Один блок: только ноты (сетка вынесена в отдельный GridBlock-слой). Мемоизирован
+// и не зависит от прокрутки — во время playback не ре-рендерится вовсе (двигается
+// только transform родителя).
 export const BlockLayer = memo(function BlockLayer({ block, startY, rh, totalRows, height, notesWidth, previewNote }: Props) {
-  const showCols = useEditorStore(s => s.showColumnDividers)
   const skin = useEditorStore(s => s.activeSkin)
   const isBlocks = skin === 'blocks'
 
   return (
     <div className="absolute left-0" style={{ top: startY, width: notesWidth, height }}>
-      <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: buildGridBackground(block, rh, showCols) }} />
       {block.notes.map((note, i) =>
         isBlocks
           ? <BlocksSprite key={i} note={note} rh={rh} totalRows={totalRows} />

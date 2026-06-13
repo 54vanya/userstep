@@ -19,6 +19,7 @@ import { ColumnHeaders } from './ColumnHeaders'
 import { BlockRail } from './BlockRail'
 import { BlockSettingsPopup } from './BlockSettingsPopup'
 import { BlockLayer } from './BlockLayer'
+import { GridBlock } from './GridLayer'
 import { Cursor } from './Cursor'
 import type { Note } from '@/types/chart'
 
@@ -86,7 +87,7 @@ function ChartGridInner({
   activeTabId,
 }: InnerProps) {
   const { tabs } = useTabsStore()
-  const { isPlaying, currentTime, setCurrentTime } = useEditorStore()
+  const { isPlaying, currentTime, setCurrentTime, showColumnDividers, showRowLines } = useEditorStore()
   const { addBlock } = useChart()
   // Стабильная ссылка для BlockRail (иначе memo бесполезен — addBlock новый каждый рендер).
   const addBlockRef = useRef(addBlock)
@@ -120,17 +121,26 @@ function ChartGridInner({
 
   // Слой, который во время playback двигается transform'ом (вместо scrollTop).
   const contentRef = useRef<HTMLDivElement>(null)
+  // Под-слой сетки внутри contentRef: двигается вместе с контентом, но в режиме
+  // pixel-snap получает контр-трансформ на дробный остаток, чтобы тонкие линии
+  // ложились на физические пиксели (спрайты нот при этом остаются сабпиксельными).
+  const gridRef = useRef<HTMLDivElement>(null)
   // Текущая позиция воспроизведения (px чарта); scrollTop при playback заморожен.
   const playbackYRef = useRef(0)
 
   // Восстановление скролла по currentTime при смене чарта: переключение вкладки
-  // (currentTime уже свопнут в сторе на время этой вкладки) или импорт в текущую.
-  const prevChartIdRef = useRef<string | undefined>(activeTab?.chart.id)
+  // (currentTime уже свопнут в сторе на время этой вкладки), импорт в текущую,
+  // а также ПЕРВЫЙ маунт (undefined → newId) — чтобы восстановить позицию из
+  // сессии после перезагрузки страницы.
+  const prevChartIdRef = useRef<string | undefined>(undefined)
   useLayoutEffect(() => {
+    // Не двигаем prevChartIdRef, пока нет layouts/скроллера — иначе на первом
+    // маунте с ещё пустыми layouts ref «съел» бы id и восстановление не сработало.
+    if (!scrollRef.current || blockLayouts.length === 0) return
     const prevId = prevChartIdRef.current
     const newId = activeTab?.chart.id
+    if (prevId === newId) return
     prevChartIdRef.current = newId
-    if (prevId === newId || !scrollRef.current || blockLayouts.length === 0) return
     const offsets = computeBlockOffsets(blockLayouts.map(l => l.block))
     const y = msToScrollY(currentTime, offsets, blockLayouts)
     scrollRef.current.scrollTop = y
@@ -189,10 +199,11 @@ function ChartGridInner({
   }
 
   const blocks = useMemo(() => blockLayouts.map(l => l.block), [blockLayouts])
-  usePlayback(blocks, blockLayouts, scrollRef, { contentRef, playbackYRef })
+  usePlayback(blocks, blockLayouts, scrollRef, { contentRef, gridRef, playbackYRef })
 
-  // Во время playback scrollTop заморожен, нативные scroll-события не приходят —
-  // обрабатываем только ручной скролл/скраб (синхронизируем currentTime).
+  // Ручной скролл/скраб → синхронизируем currentTime. Во время playback вертикальный
+  // скролл заблокирован (overflowY:hidden), так что сюда долетают только ручные
+  // скроллы на паузе; isPlaying-гард — страховка от остаточных событий.
   const handleScroll = (newScrollTop: number) => {
     if (isPlaying) return
     const offsets = computeBlockOffsets(blocks)
@@ -247,8 +258,17 @@ function ChartGridInner({
       </div>
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto overflow-x-auto bg-grid select-none"
-        style={{ touchAction: 'pan-y' }}
+        className="flex-1 overflow-x-auto bg-grid select-none"
+        // Во время playback вьюпорт двигается transform'ом от зафиксированного на
+        // старте scrollTop. Нативный вертикальный скролл (тачпад/колесо) сдвинул бы
+        // реальный scrollTop и рассинхронил бы конвейер с курсором — поэтому на время
+        // playback вертикальный скролл блокируем (scrollbar-gutter держит ширину,
+        // чтобы контент не прыгал по горизонтали при появлении/скрытии скроллбара).
+        style={{
+          touchAction: isPlaying ? 'none' : 'pan-y',
+          overflowY: isPlaying ? 'hidden' : 'auto',
+          scrollbarGutter: 'stable',
+        }}
         onScroll={e => handleScroll(e.currentTarget.scrollTop)}
         onContextMenu={e => e.preventDefault()}
         onMouseMove={handleMouseMove}
@@ -261,6 +281,24 @@ function ChartGridInner({
         <Cursor />
         <div style={{ height: CURSOR_LINE_Y, flexShrink: 0 }} />
         <div ref={contentRef} style={{ position: 'relative', height: totalHeight, width: notesWidth + RAIL_WIDTH }}>
+          <div
+            ref={gridRef}
+            className="absolute left-0 top-0 pointer-events-none"
+            style={{ width: notesWidth, height: totalHeight }}
+          >
+            {blockLayouts.map(({ block, startY, endY, rh }) => (
+              <GridBlock
+                key={block.id}
+                block={block}
+                startY={startY}
+                height={endY - startY}
+                rh={rh}
+                notesWidth={notesWidth}
+                showCols={showColumnDividers}
+                showRows={showRowLines}
+              />
+            ))}
+          </div>
           <div
             style={{ position: 'absolute', left: 0, top: 0, width: notesWidth, height: totalHeight }}
           >

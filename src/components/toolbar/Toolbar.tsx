@@ -1,4 +1,4 @@
-import { useRef, useEffect, useMemo } from 'react'
+import { useRef, useEffect, useMemo, useState } from 'react'
 import { audioEngine } from '@/services/audioEngine'
 import { useTabsStore } from '@/store/tabsStore'
 import { useEditorStore } from '@/store/editorStore'
@@ -70,6 +70,18 @@ export function Toolbar() {
     return last.startMs + blockRowCount(blocks[blocks.length - 1]) * last.msPerRow
   }, [activeTab?.chart.blocks])
   const { openAudio, audioFileName } = useAudio()
+
+  // hasAudio() не реактивен, а декод аудио (loadBlob) асинхронный — без этого
+  // кнопка Play на старте остаётся выключенной до случайного ре-рендера.
+  // Подписываемся на событие загрузки и пере-проверяем при смене вкладки.
+  const [audioReady, setAudioReady] = useState(() => audioEngine.hasAudio())
+  useEffect(() => {
+    const refresh = () => setAudioReady(audioEngine.hasAudio())
+    audioEngine.on('load', refresh)
+    refresh()
+    return () => audioEngine.off('load', refresh)
+  }, [activeTabId])
+
   const scale = activeTab?.scale ?? 3
   const playbackRate = activeTab?.playbackRate ?? 1.0
 
@@ -90,7 +102,7 @@ export function Toolbar() {
     <div className="flex items-center gap-3 px-3 h-10 border-b border-border bg-card shrink-0 text-sm">
       <button
         onClick={handlePlayPause}
-        disabled={!audioEngine.hasAudio()}
+        disabled={!audioReady}
         className="w-7 h-7 flex items-center justify-center rounded bg-primary text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-40"
         title={isPlaying ? 'Pause (Space)' : 'Play (Space)'}
       >

@@ -7,13 +7,21 @@ type PersistedTab = Omit<Tab, 'audioBlob'>
 interface PersistedSession {
   tabs: PersistedTab[]
   activeTabId: string | null
+  // Позиция воспроизведения по вкладкам (tabId → мс). Храним отдельной картой,
+  // чтобы не мутировать chart.editorSettings (и не засорять undo-историю).
+  times?: Record<string, number>
 }
 
-export function saveSession(tabs: Tab[], activeTabId: string | null): void {
+export function saveSession(
+  tabs: Tab[],
+  activeTabId: string | null,
+  times?: Record<string, number>,
+): void {
   try {
     const data: PersistedSession = {
       tabs: tabs.map(({ audioBlob: _, ...rest }) => rest),
       activeTabId,
+      times,
     }
     localStorage.setItem(SESSION_KEY, JSON.stringify(data))
   } catch { /* QuotaExceededError — ignore */ }

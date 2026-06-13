@@ -7,6 +7,7 @@ class AudioEngine {
   private _isPlaying = false
   private _playbackRate = 1.0
   private endListeners: Array<() => void> = []
+  private loadListeners: Array<() => void> = []
 
   private getCtx(): AudioContext {
     if (!this.ctx) this.ctx = new AudioContext()
@@ -17,6 +18,7 @@ class AudioEngine {
     const ctx = this.getCtx()
     const arrayBuffer = await blob.arrayBuffer()
     this.buffer = await ctx.decodeAudioData(arrayBuffer)
+    this.loadListeners.forEach(cb => cb())
   }
 
   play(fromMs: number): void {
@@ -82,12 +84,14 @@ class AudioEngine {
     return this.buffer !== null
   }
 
-  on(_event: 'end', cb: () => void): void {
-    this.endListeners.push(cb)
+  on(event: 'end' | 'load', cb: () => void): void {
+    if (event === 'load') this.loadListeners.push(cb)
+    else this.endListeners.push(cb)
   }
 
-  off(_event: 'end', cb: () => void): void {
-    this.endListeners = this.endListeners.filter(l => l !== cb)
+  off(event: 'end' | 'load', cb: () => void): void {
+    if (event === 'load') this.loadListeners = this.loadListeners.filter(l => l !== cb)
+    else this.endListeners = this.endListeners.filter(l => l !== cb)
   }
 }
 
