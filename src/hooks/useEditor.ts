@@ -1,6 +1,6 @@
 import { useRef, useState, useCallback } from 'react'
 import { useTabsStore } from '@/store/tabsStore'
-import { COLUMN_WIDTH, CURSOR_LINE_Y, blockRowCount } from '@/utils/geometry'
+import { blockRowCount, hitLine, snapRow } from '@/utils/geometry'
 import type { BlockLayout } from '@/utils/geometry'
 import type { Note, Block } from '@/types/chart'
 
@@ -66,6 +66,9 @@ export function useEditor(
   scrollRef: React.RefObject<HTMLDivElement | null>,
   activeTabId: string | null,
   cols: number,
+  // Эффективная ширина колонки и Y хит-линии (зависят от зума поля).
+  cw: number,
+  cursorY: number,
   // Во время playback scrollTop заморожен, а слой двигается transform'ом — берём
   // фактическую позиция воспроизведения, иначе hit-test промахивается.
   scrollOffset: () => number,
@@ -81,21 +84,17 @@ export function useEditor(
     if (!el) return null
     const rect = el.getBoundingClientRect()
     const px = clientX - rect.left
-    const py = clientY - rect.top + scrollOffset() - CURSOR_LINE_Y
+    const py = clientY - rect.top + scrollOffset() - cursorY
 
-    const col = Math.floor(px / COLUMN_WIDTH)
+    const col = Math.floor(px / cw)
     if (col < 0 || col >= cols) return null
 
-    for (const layout of blockLayouts) {
-      if (py >= layout.startY && py < layout.endY) {
-        const row = Math.floor((py - layout.startY) / layout.rh)
-        if (row >= 0 && row < layout.totalRows) {
-          return { layout, row, col }
-        }
-      }
-    }
-    return null
-  }, [blockLayouts, scrollRef, cols, scrollOffset])
+    // Хит-позиция — линия; зона регистрации — квадрат вокруг неё (мёртвые зоны
+    // между линиями на редких блоках → hit === null).
+    const hit = hitLine(py, blockLayouts, cw)
+    if (!hit) return null
+    return { layout: hit.layout, row: hit.row, col }
+  }, [blockLayouts, scrollRef, cols, cw, cursorY, scrollOffset])
 
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     if (e.button !== 0) return
@@ -125,7 +124,7 @@ export function useEditor(
     if (!el) return
 
     const rect = el.getBoundingClientRect()
-    const py = e.clientY - rect.top + scrollOffset() - CURSOR_LINE_Y
+    const py = e.clientY - rect.top + scrollOffset() - cursorY
 
     const startLayout = blockLayouts.find(l => l.block.id === drag.blockId)
     if (!startLayout) return
@@ -138,22 +137,15 @@ export function useEditor(
       return
     }
 
-    // Find which block the mouse is in
-    let endLayout: BlockLayout | null = null
-    let endRow = 0
-    for (const layout of blockLayouts) {
-      if (py < layout.startY) break
-      const row = Math.min(layout.totalRows - 1, Math.max(0, Math.floor((py - layout.startY) / layout.rh)))
-      endLayout = layout
-      endRow = row
-      if (py < layout.endY) break
-    }
-
-    if (!endLayout) {
+    // Конец холда привязываем к ближайшей линии (без мёртвых зон).
+    const snap = snapRow(py, blockLayouts)
+    if (!snap) {
       dragRef.current = { ...drag, draggedUp: true }
       setPreview(null)
       return
     }
+    const endLayout = snap.layout
+    const endRow = snap.row
 
     const isSameBlock = endLayout.block.id === drag.blockId
     const hasExtent = !isSameBlock || endRow > drag.startRow
@@ -165,7 +157,7 @@ export function useEditor(
     } else {
       setPreview(null)
     }
-  }, [blockLayouts, scrollRef, scrollOffset])
+  }, [blockLayouts, scrollRef, scrollOffset, cursorY])
 
   const commit = useCallback(() => {
     const drag = dragRef.current

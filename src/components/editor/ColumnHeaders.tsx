@@ -1,5 +1,3 @@
-import { COLUMN_WIDTH } from '@/utils/geometry'
-
 const ARROWS = ['↙', '↖', null, '↗', '↘']
 const ARROW_COLORS = [
   'text-orange-400',
@@ -19,13 +17,14 @@ function BeveledSquare({ color }: { color: string }) {
 
 interface Props {
   cols: number
+  cw: number
 }
 
-export function ColumnHeaders({ cols }: Props) {
+export function ColumnHeaders({ cols, cw }: Props) {
   return (
     <div
       className="flex shrink-0 bg-card border-b border-grid-beat select-none"
-      style={{ height: 32, width: cols * COLUMN_WIDTH }}
+      style={{ height: 32, width: cols * cw }}
     >
       {Array.from({ length: cols }, (_, i) => {
         const idx = i % 5
@@ -34,7 +33,7 @@ export function ColumnHeaders({ cols }: Props) {
           <div
             key={i}
             className={`flex items-center justify-center text-sm font-bold ${ARROW_COLORS[idx]}`}
-            style={{ width: COLUMN_WIDTH, flexShrink: 0 }}
+            style={{ width: cw, flexShrink: 0 }}
           >
             {arrow === null
               ? <BeveledSquare color={ARROW_COLORS[idx]} />

@@ -9,6 +9,8 @@ import {
   COLUMN_WIDTH,
   CURSOR_LINE_Y,
   RAIL_WIDTH,
+  hitLine,
+  hitHalf,
 } from '@/utils/geometry'
 import type { BlockLayout } from '@/utils/geometry'
 import { useChart } from '@/hooks/useChart'
@@ -21,12 +23,18 @@ import { BlockSettingsPopup } from './BlockSettingsPopup'
 import { BlockLayer } from './BlockLayer'
 import { GridBlock } from './GridLayer'
 import { Cursor } from './Cursor'
+import { NoteCounterOverlay } from './NoteCounterOverlay'
+import { computeHitTimes } from '@/utils/noteCount'
+import { sectionTint } from '@/utils/viewSettings'
 import type { Note } from '@/types/chart'
 
 export function ChartGrid() {
   const { tabs, activeTabId } = useTabsStore()
   const activeTab = tabs.find(t => t.id === activeTabId)
-  const scale = activeTab?.scale ?? 3
+  const fieldZoom = useEditorStore(s => s.fieldZoom)
+  // Зум поля — равномерный множитель: per-tab scale (расстояние строк) тоже на него
+  // умножается, чтобы поле росло целиком, а не только ноты/колонки.
+  const scale = (activeTab?.scale ?? 3) * (fieldZoom / 100)
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const [containerH, setContainerH] = useState(600)
@@ -87,7 +95,11 @@ function ChartGridInner({
   activeTabId,
 }: InnerProps) {
   const { tabs } = useTabsStore()
-  const { isPlaying, currentTime, setCurrentTime, showColumnDividers, showRowLines } = useEditorStore()
+  const { isPlaying, currentTime, setCurrentTime, showColumnDividers, showRowLines, fieldZoom, showNoteCounter, railColoring } = useEditorStore()
+  // Зум поля: ноты/колонки и хит-линия растут пропорционально (per-tab scale при этом
+  // отвечает лишь за расстояние между строками).
+  const cw = (COLUMN_WIDTH * fieldZoom) / 100
+  const cursorY = (CURSOR_LINE_Y * fieldZoom) / 100
   const { addBlock } = useChart()
   // Стабильная ссылка для BlockRail (иначе memo бесполезен — addBlock новый каждый рендер).
   const addBlockRef = useRef(addBlock)
@@ -109,15 +121,15 @@ function ChartGridInner({
     const rect = scrollEl.getBoundingClientRect()
     const layout = blockLayouts.find(l => l.block.id === blockId)
     if (!layout) return
-    const blockScreenTop = rect.top + CURSOR_LINE_Y + layout.startY - scrollEl.scrollTop
-    const POPUP_W = 224
-    const railRight = rect.left + cols * COLUMN_WIDTH + RAIL_WIDTH - scrollEl.scrollLeft
+    const blockScreenTop = rect.top + cursorY + layout.startY - scrollEl.scrollTop
+    const POPUP_W = 240
+    const railRight = rect.left + cols * cw + RAIL_WIDTH - scrollEl.scrollLeft
     let left = railRight + 8
     if (left + POPUP_W > window.innerWidth - 8) {
       left = railRight - POPUP_W - 8
     }
     setPopupPos({ top: blockScreenTop, left: Math.max(8, left), editorTop: rect.top, editorBottom: rect.bottom })
-  }, [openBlockId, blockLayouts, scrollRef, cols])
+  }, [openBlockId, blockLayouts, scrollRef, cols, cw, cursorY])
 
   // Слой, который во время playback двигается transform'ом (вместо scrollTop).
   const contentRef = useRef<HTMLDivElement>(null)
@@ -176,22 +188,19 @@ function ChartGridInner({
     if (!el || !hl) return
     const rect = el.getBoundingClientRect()
     const x = e.clientX - rect.left
-    const chartY = e.clientY - rect.top + scrollOffset() - CURSOR_LINE_Y
-    const col = Math.floor(x / COLUMN_WIDTH)
+    const chartY = e.clientY - rect.top + scrollOffset() - cursorY
+    const col = Math.floor(x / cw)
     if (col < 0 || col >= cols) { hl.style.display = 'none'; return }
-    for (const layout of blockLayouts) {
-      if (chartY >= layout.startY && chartY < layout.endY) {
-        const row = Math.floor((chartY - layout.startY) / layout.rh)
-        if (row >= 0 && row < layout.totalRows) {
-          hl.style.display = 'block'
-          hl.style.left = `${col * COLUMN_WIDTH}px`
-          hl.style.top = `${layout.startY + row * layout.rh}px`
-          hl.style.height = `${layout.rh}px`
-          return
-        }
-      }
-    }
-    hl.style.display = 'none'
+    // Подсветка повторяет зону клика: квадрат вокруг ближайшей линии (в плотных
+    // блоках = полная ячейка rh, в редких = cw×cw), скрыт в мёртвой зоне.
+    const hit = hitLine(chartY, blockLayouts, cw)
+    if (!hit) { hl.style.display = 'none'; return }
+    const half = hitHalf(hit.layout.rh, cw)
+    hl.style.display = 'block'
+    hl.style.left = `${col * cw}px`
+    hl.style.top = `${hit.lineY - half}px`
+    hl.style.width = `${cw}px`
+    hl.style.height = `${half * 2}px`
   }
 
   const handleMouseLeave = () => {
@@ -200,6 +209,12 @@ function ChartGridInner({
 
   const blocks = useMemo(() => blockLayouts.map(l => l.block), [blockLayouts])
   usePlayback(blocks, blockLayouts, scrollRef, { contentRef, gridRef, playbackYRef })
+
+  // Времена хитов для оверлея-счётчика — считаем только когда оверлей включён.
+  const counterHitTimes = useMemo(
+    () => (showNoteCounter ? computeHitTimes(blocks) : []),
+    [showNoteCounter, blocks],
+  )
 
   // Ручной скролл/скраб → синхронизируем currentTime. Во время playback вертикальный
   // скролл заблокирован (overflowY:hidden), так что сюда долетают только ручные
@@ -211,7 +226,7 @@ function ChartGridInner({
   }
 
   const { onPointerDown, onPointerMove, onPointerUp, onPointerCancel, preview } =
-    useEditor(blockLayouts, scrollRef, activeTabId, cols, scrollOffset)
+    useEditor(blockLayouts, scrollRef, activeTabId, cols, cw, cursorY, scrollOffset)
 
   // Превью растягивающегося холда → синтетическая нота на каждый затронутый блок
   // (включая кросс-блочные части через continued/continues). Не зависит от scroll.
@@ -244,16 +259,17 @@ function ChartGridInner({
       ? blockLayouts[blockLayouts.length - 1].endY + BLOCK_DIVIDER_HEIGHT
       : 0
 
-  const notesWidth = cols * COLUMN_WIDTH
+  const notesWidth = cols * cw
 
   const openBlockIndex = openBlockId
     ? blockLayouts.findIndex(l => l.block.id === openBlockId)
     : -1
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="relative flex flex-col h-full overflow-hidden">
+      {showNoteCounter && <NoteCounterOverlay hitTimes={counterHitTimes} width={notesWidth} />}
       <div className="flex shrink-0">
-        <ColumnHeaders cols={cols} />
+        <ColumnHeaders cols={cols} cw={cw} />
         <div className="shrink-0 border-b border-l border-grid-beat bg-card" style={{ width: RAIL_WIDTH, height: 32 }} />
       </div>
       <div
@@ -278,9 +294,24 @@ function ChartGridInner({
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerCancel}
       >
-        <Cursor />
-        <div style={{ height: CURSOR_LINE_Y, flexShrink: 0 }} />
+        <Cursor cursorY={cursorY} />
+        <div style={{ height: cursorY, flexShrink: 0 }} />
         <div ref={contentRef} style={{ position: 'relative', height: totalHeight, width: notesWidth + RAIL_WIDTH }}>
+          {railColoring !== 'none' && (
+            <div className="absolute left-0 top-0 pointer-events-none" style={{ width: notesWidth, height: totalHeight }}>
+              {blockLayouts.map(({ block, startY, endY }, i) => {
+                const tint = sectionTint(railColoring, i)
+                if (!tint) return null
+                return (
+                  <div
+                    key={block.id}
+                    className="absolute left-0"
+                    style={{ top: startY, height: endY - startY, width: notesWidth, backgroundColor: tint }}
+                  />
+                )
+              })}
+            </div>
+          )}
           <div
             ref={gridRef}
             className="absolute left-0 top-0 pointer-events-none"
@@ -293,6 +324,7 @@ function ChartGridInner({
                 startY={startY}
                 height={endY - startY}
                 rh={rh}
+                cw={cw}
                 notesWidth={notesWidth}
                 showCols={showColumnDividers}
                 showRows={showRowLines}
@@ -308,7 +340,7 @@ function ChartGridInner({
               style={{
                 display: 'none',
                 position: 'absolute',
-                width: COLUMN_WIDTH,
+                width: cw,
                 pointerEvents: 'none',
                 zIndex: 2,
               }}
@@ -319,6 +351,7 @@ function ChartGridInner({
                 block={block}
                 startY={startY}
                 rh={rh}
+                cw={cw}
                 totalRows={totalRows}
                 height={endY - startY}
                 notesWidth={notesWidth}
@@ -330,11 +363,12 @@ function ChartGridInner({
             blockLayouts={blockLayouts}
             totalHeight={totalHeight}
             openBlockId={openBlockId}
+            railColoring={railColoring}
             onBlockClick={handleRailBlockClick}
             onAddBlock={stableAddBlock}
           />
         </div>
-        <div style={{ height: Math.max(0, containerH - CURSOR_LINE_Y), flexShrink: 0 }} />
+        <div style={{ height: Math.max(0, containerH - cursorY), flexShrink: 0 }} />
       </div>
       {openBlockId !== null && openBlockIndex >= 0 && (
         <BlockSettingsPopup

@@ -18,7 +18,14 @@ export function msToScrollY(ms: number, offsets: BlockOffset[], layouts: BlockLa
   for (let i = offsets.length - 1; i >= 0; i--) {
     if (ms >= offsets[i].startMs) {
       if (i >= layouts.length) continue
-      const row = (ms - offsets[i].startMs) / offsets[i].msPerRow
+      // Зажимаем строку концом блока: у Delay следующего блока нет пикселей в layout
+      // (BLOCK_DIVIDER_HEIGHT=0), поэтому без клампа позиция «проскакивала» за границу
+      // на время задержки, а на старте следующего блока резко возвращалась назад
+      // (прыжок нот вниз). С клампом конвейер просто ПАУЗИТСЯ на границе на время Delay.
+      const row = Math.min(
+        (ms - offsets[i].startMs) / offsets[i].msPerRow,
+        layouts[i].totalRows,
+      )
       return layouts[i].startY + row * layouts[i].rh
     }
   }

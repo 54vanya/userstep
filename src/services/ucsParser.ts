@@ -102,8 +102,15 @@ function rowsToNotes(rows: string[], carryOver: Map<number, boolean>): Note[] {
   // Holds still open at block end
   holdStarts.forEach((hold, col) => {
     const lastActive = hold.lastActiveRow
-    // No active rows seen in this block (continued hold with no H): skip silently
-    if (lastActive < 0) return
+    // Continued hold без единого H/W в этом блоке (например пустой блок-распорка в
+    // BPM-гиммике): тело проходит СКВОЗЬ весь блок, держим перенос в следующий.
+    // Иначе цепочка холда рвалась на промежуточном пустом блоке.
+    if (lastActive < 0) {
+      const note: Note = { row: hold.row, col, type: 'hold', endRow: Math.max(0, rows.length - 1), continued: true, continues: true }
+      notes.push(note)
+      carryOver.set(col, true)
+      return
+    }
     const endRow = lastActive
     const crossesBlockEnd = endRow === rows.length - 1
     const note: Note = { row: hold.row, col, type: 'hold', endRow }
@@ -122,8 +129,12 @@ export function parseUcs(text: string): Chart {
 
   const carryOver = new Map<number, boolean>()
   const blocks: Block[] = rawBlocks.map(rb => {
-    const measures = Math.max(1, Math.round(rb.rows.length / (rb.beat * rb.split)))
-    const expectedRows = rb.beat * rb.split * measures
+    const rowCount = rb.rows.length
+    // measures дробное: rowCount/(beat*split). В гиммик-чартах (см. CS241) большинство
+    // блоков — неполные такты (< 1 measure). rowCount хранится как авторитетное целое
+    // число строк, measures — точная дробь для отображения/правки.
+    const cells = rb.beat * rb.split
+    const measures = cells > 0 ? rowCount / cells : 1
     return {
       id: uuidv4(),
       bpm: rb.bpm,
@@ -131,7 +142,7 @@ export function parseUcs(text: string): Chart {
       beat: rb.beat,
       split: rb.split,
       measures,
-      rowCount: rb.rows.length !== expectedRows ? rb.rows.length : undefined,
+      rowCount,
       notes: rowsToNotes(rb.rows, carryOver),
     }
   })

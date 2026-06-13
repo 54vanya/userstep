@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { loadTheme, applyTheme, type Theme } from '@/utils/theme'
-import { loadViewSettings, saveViewSettings, type PlaybackMode } from '@/utils/viewSettings'
+import { loadViewSettings, saveViewSettings, clampFieldZoom, type PlaybackMode, type RailColoring } from '@/utils/viewSettings'
 
 interface EditorStore {
   isPlaying: boolean
@@ -10,6 +10,9 @@ interface EditorStore {
   activeSkin: string
   showFps: boolean
   playbackMode: PlaybackMode
+  fieldZoom: number
+  showNoteCounter: boolean
+  railColoring: RailColoring
   theme: Theme
 
   setPlaying: (playing: boolean) => void
@@ -19,6 +22,9 @@ interface EditorStore {
   setActiveSkin: (skin: string) => void
   setShowFps: (show: boolean) => void
   setPlaybackMode: (mode: PlaybackMode) => void
+  setFieldZoom: (zoom: number) => void
+  setShowNoteCounter: (show: boolean) => void
+  setRailColoring: (mode: RailColoring) => void
   setTheme: (theme: Theme) => void
 }
 
@@ -32,6 +38,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   activeSkin: _view.activeSkin,
   showFps: _view.showFps,
   playbackMode: _view.playbackMode,
+  fieldZoom: _view.fieldZoom,
+  showNoteCounter: _view.showNoteCounter,
+  railColoring: _view.railColoring,
   theme: loadTheme(),
 
   setPlaying: (isPlaying) => set({ isPlaying }),
@@ -41,10 +50,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   setActiveSkin: (activeSkin) => { set({ activeSkin }); persistView(get) },
   setShowFps: (showFps) => { set({ showFps }); persistView(get) },
   setPlaybackMode: (playbackMode) => { set({ playbackMode }); persistView(get) },
+  setFieldZoom: (zoom) => { set({ fieldZoom: clampFieldZoom(zoom) }); persistView(get) },
+  setShowNoteCounter: (showNoteCounter) => { set({ showNoteCounter }); persistView(get) },
+  setRailColoring: (railColoring) => { set({ railColoring }); persistView(get) },
   setTheme: (theme) => { applyTheme(theme); set({ theme }) },
 }))
 
 function persistView(get: () => EditorStore): void {
-  const { showColumnDividers, showRowLines, activeSkin, showFps, playbackMode } = get()
-  saveViewSettings({ showColumnDividers, showRowLines, activeSkin, showFps, playbackMode })
+  const { showColumnDividers, showRowLines, activeSkin, showFps, playbackMode, fieldZoom, showNoteCounter, railColoring } = get()
+  saveViewSettings({ showColumnDividers, showRowLines, activeSkin, showFps, playbackMode, fieldZoom, showNoteCounter, railColoring })
 }

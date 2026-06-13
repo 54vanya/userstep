@@ -120,6 +120,8 @@ export function MenuBar() {
     showRowLines, setShowRowLines,
     activeSkin, setActiveSkin,
     showFps, setShowFps,
+    showNoteCounter, setShowNoteCounter,
+    railColoring, setRailColoring,
     playbackMode, setPlaybackMode,
     theme, setTheme,
   } = useEditorStore()
@@ -204,6 +206,12 @@ export function MenuBar() {
         <Toggle on={showColumnDividers} onToggle={() => setShowColumnDividers(!showColumnDividers)}>Column lines</Toggle>
         <Toggle on={showRowLines} onToggle={() => setShowRowLines(!showRowLines)}>Row lines</Toggle>
         <Toggle on={showFps} onToggle={() => setShowFps(!showFps)}>Show FPS</Toggle>
+        <Toggle on={showNoteCounter} onToggle={() => setShowNoteCounter(!showNoteCounter)}>Note counter overlay</Toggle>
+        <Separator />
+        <SectionLabel>Section colors</SectionLabel>
+        <Radio on={railColoring === 'none'} onSelect={() => setRailColoring('none')}>None</Radio>
+        <Radio on={railColoring === 'mono'} onSelect={() => setRailColoring('mono')}>Monochrome</Radio>
+        <Radio on={railColoring === 'color'} onSelect={() => setRailColoring('color')}>Color</Radio>
         <Separator />
         <SectionLabel>Skin</SectionLabel>
         <Radio on={activeSkin === 'basic'} onSelect={() => setActiveSkin('basic')}>Basic</Radio>

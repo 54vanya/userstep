@@ -1,6 +1,16 @@
 import { useRef, useLayoutEffect, useState } from 'react'
 import { Trash2 } from 'lucide-react'
 import { useChart } from '@/hooks/useChart'
+import { blockRowCount } from '@/utils/geometry'
+
+const BEAT_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 12, 16]
+const SPLIT_OPTIONS = [1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 128]
+
+// Гарантируем, что текущее значение блока есть в списке (импортированные чарты
+// используют сплиты до 128 и нестандартные доли — иначе select их потеряет).
+function withCurrent(opts: number[], cur: number): number[] {
+  return opts.includes(cur) ? opts : [...opts, cur].sort((a, b) => a - b)
+}
 
 interface Props {
   blockId: string
@@ -28,12 +38,13 @@ export function BlockSettingsPopup({ blockId, index, top, left, editorTop, edito
 
   if (!block || !chart) return null
   const canDelete = chart.blocks.length > 1
+  const setBpm = (v: number) => updateBlock(blockId, { bpm: Math.min(999, Math.max(1, v)) })
 
   return (
     <div
       ref={popupRef}
       data-testid="block-settings-popup"
-      className="fixed z-50 w-52 bg-card border border-border rounded-md shadow-xl text-xs overflow-hidden"
+      className="fixed z-50 w-60 bg-card border border-border rounded-md shadow-xl text-xs overflow-hidden"
       style={{ top: clampedTop, left }}
       onPointerDown={e => e.stopPropagation()}
     >
@@ -67,14 +78,31 @@ export function BlockSettingsPopup({ blockId, index, top, left, editorTop, edito
       </div>
       <div className="px-3 py-2 space-y-1.5">
         <FieldRow label="BPM">
-          <input
-            type="number"
-            min={1}
-            max={999}
-            value={block.bpm}
-            onChange={e => updateBlock(blockId, { bpm: parseFloat(e.target.value) || 120 })}
-            className="w-full bg-input border border-border rounded px-1.5 py-0.5 text-foreground"
-          />
+          <div className="flex items-center gap-1">
+            <input
+              type="number"
+              min={0.001}
+              max={9999}
+              step="any"
+              value={block.bpm}
+              onChange={e => updateBlock(blockId, { bpm: parseFloat(e.target.value) || 120 })}
+              className="flex-1 min-w-0 bg-input border border-border rounded px-1.5 py-0.5 text-foreground"
+            />
+            <button
+              onClick={() => setBpm(block.bpm * 2)}
+              title="Multiply BPM by 2"
+              className="shrink-0 px-1 py-0.5 rounded border border-border bg-secondary text-secondary-foreground hover:bg-accent transition-colors leading-none tabular-nums"
+            >
+              ×2
+            </button>
+            <button
+              onClick={() => setBpm(block.bpm / 2)}
+              title="Divide BPM by 2"
+              className="shrink-0 px-1 py-0.5 rounded border border-border bg-secondary text-secondary-foreground hover:bg-accent transition-colors leading-none tabular-nums"
+            >
+              ÷2
+            </button>
+          </div>
         </FieldRow>
         <FieldRow label="Beat">
           <select
@@ -82,7 +110,7 @@ export function BlockSettingsPopup({ blockId, index, top, left, editorTop, edito
             onChange={e => updateBlock(blockId, { beat: parseInt(e.target.value) })}
             className="w-full bg-input border border-border rounded px-1 py-0.5 text-foreground"
           >
-            {[2, 3, 4, 6, 8].map(v => <option key={v} value={v}>{v}</option>)}
+            {withCurrent(BEAT_OPTIONS, block.beat).map(v => <option key={v} value={v}>{v}</option>)}
           </select>
         </FieldRow>
         <FieldRow label="Split">
@@ -91,18 +119,23 @@ export function BlockSettingsPopup({ blockId, index, top, left, editorTop, edito
             onChange={e => updateBlock(blockId, { split: parseInt(e.target.value) })}
             className="w-full bg-input border border-border rounded px-1 py-0.5 text-foreground"
           >
-            {[2, 3, 4, 6, 8, 12, 16].map(v => <option key={v} value={v}>{v}</option>)}
+            {withCurrent(SPLIT_OPTIONS, block.split).map(v => <option key={v} value={v}>{v}</option>)}
           </select>
         </FieldRow>
         <FieldRow label="Measures">
-          <input
-            type="number"
-            min={1}
-            max={256}
-            value={block.measures}
-            onChange={e => updateBlock(blockId, { measures: parseInt(e.target.value) || 1 })}
-            className="w-full bg-input border border-border rounded px-1.5 py-0.5 text-foreground"
-          />
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min={0}
+              step="any"
+              value={block.measures}
+              onChange={e => updateBlock(blockId, { measures: parseFloat(e.target.value) || 0 })}
+              className="flex-1 min-w-0 bg-input border border-border rounded px-1.5 py-0.5 text-foreground"
+            />
+            <span className="text-muted-foreground shrink-0 tabular-nums text-[10px] whitespace-nowrap" title="Rows in block">
+              {blockRowCount(block)} rows
+            </span>
+          </div>
         </FieldRow>
         <FieldRow label="Delay ms">
           <input
@@ -122,7 +155,7 @@ function FieldRow({ label, children }: { label: string; children: React.ReactNod
   return (
     <div className="flex items-center gap-2">
       <span className="text-muted-foreground w-14 shrink-0">{label}</span>
-      <div className="flex-1">{children}</div>
+      <div className="flex-1 min-w-0">{children}</div>
     </div>
   )
 }

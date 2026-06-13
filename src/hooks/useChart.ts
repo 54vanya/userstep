@@ -88,16 +88,25 @@ export function useChart() {
     if (!chart || !activeTabId) return
     const blocks = chart.blocks.map(b => {
       if (b.id !== blockId) return b
-      const updated = { ...b, ...patch, rowCount: undefined }
-      const totalRows = updated.beat * updated.split * updated.measures
-      const notes = updated.notes
+      const merged = { ...b, ...patch }
+      const cells = Math.max(1, merged.beat * merged.split)
+      // rowCount — авторитетное целое число строк. Если задан явно (правка «Rows»),
+      // берём его и пересчитываем measures под него. Иначе считаем из beat*split*measures
+      // (measures дробное → округляем), сохраняя measures как есть, чтобы дробный ввод
+      // не «снэпился» на каждом нажатии. Так блоки с неполным тактом (CS241) не ломаются
+      // при правке любого поля.
+      const rowCount = patch.rowCount !== undefined
+        ? Math.max(1, Math.round(patch.rowCount))
+        : Math.max(1, Math.round(cells * merged.measures))
+      const measures = patch.rowCount !== undefined ? rowCount / cells : merged.measures
+      const notes = merged.notes
         .map(n =>
           n.type === 'hold'
-            ? { ...n, endRow: Math.min(n.endRow ?? n.row, totalRows - 1) }
+            ? { ...n, endRow: Math.min(n.endRow ?? n.row, rowCount - 1) }
             : n
         )
-        .filter(n => n.row < totalRows)
-      return { ...updated, notes }
+        .filter(n => n.row < rowCount)
+      return { ...merged, rowCount, measures, notes }
     })
     updateChart(activeTabId, { ...chart, blocks })
   }

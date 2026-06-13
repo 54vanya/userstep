@@ -1,4 +1,5 @@
 import type { Block, Chart, Note } from '@/types/chart'
+import { blockRowCount } from '@/utils/geometry'
 
 function notesToRows(notes: Note[], totalRows: number, cols: number): string[] {
   const rows: string[][] = Array.from({ length: totalRows }, () => Array(cols).fill('.'))
@@ -37,7 +38,7 @@ function serializeBlock(block: Block, cols: number, isFirst: boolean): string {
   lines.push(`:Beat=${block.beat}`)
   lines.push(`:Split=${block.split}`)
 
-  const totalRows = block.rowCount ?? block.beat * block.split * block.measures
+  const totalRows = blockRowCount(block)
   const rows = notesToRows(block.notes, totalRows, cols)
   lines.push(...rows)
 

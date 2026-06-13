@@ -5,6 +5,8 @@ import { useEditorStore } from '@/store/editorStore'
 import { useAudio } from '@/hooks/useAudio'
 import { computeBlockOffsets } from '@/utils/timing'
 import { blockRowCount } from '@/utils/geometry'
+import { computeHitTimes, countPassed } from '@/utils/noteCount'
+import { FIELD_ZOOM_MIN, FIELD_ZOOM_MAX, FIELD_ZOOM_STEP } from '@/utils/viewSettings'
 
 function formatMs(ms: number): string {
   const total = Math.max(0, Math.round(ms))
@@ -56,9 +58,46 @@ function TimeDisplay({ totalMs }: TimeDisplayProps) {
   )
 }
 
+// Счётчик нот «пройдено / всего». Пройденное обновляется по RAF (как TimeDisplay),
+// без React-ререндеров каждый кадр. В конце трека числа сравниваются.
+function NoteCountDisplay({ hitTimes }: { hitTimes: number[] }) {
+  const ref = useRef<HTMLSpanElement>(null)
+  const total = hitTimes.length
+  // Резервируем ширину «пройдено» под число разрядов общего количества, чтобы при
+  // переходе через 999→1000 (когда total > 999) счётчик не дёргал «/ total».
+  const passedWidthCh = String(total).length
+  useEffect(() => {
+    let rafId: number
+    let lastText = ''
+    let lastUpdate = 0
+    const tick = (now: number) => {
+      if (now - lastUpdate >= 33) {
+        lastUpdate = now
+        const ms = audioEngine.isPlaying()
+          ? audioEngine.getCurrentMs()
+          : useEditorStore.getState().currentTime
+        const text = String(countPassed(hitTimes, ms))
+        if (text !== lastText && ref.current) {
+          ref.current.textContent = text
+          lastText = text
+        }
+      }
+      rafId = requestAnimationFrame(tick)
+    }
+    rafId = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(rafId)
+  }, [hitTimes, total])
+
+  return (
+    <span className="text-xs font-mono text-muted-foreground tabular-nums whitespace-nowrap shrink-0" title="Notes passed / total">
+      ♪ <span ref={ref} className="inline-block text-right" style={{ minWidth: `${passedWidthCh}ch` }} /> / {total}
+    </span>
+  )
+}
+
 export function Toolbar() {
   const { tabs, activeTabId, setTabScale, setTabPlaybackRate } = useTabsStore()
-  const { isPlaying, currentTime, setPlaying, setCurrentTime } = useEditorStore()
+  const { isPlaying, currentTime, setPlaying, setCurrentTime, fieldZoom, setFieldZoom } = useEditorStore()
   const activeTab = tabs.find(t => t.id === activeTabId)
 
   const totalMs = useMemo(() => {
@@ -69,6 +108,14 @@ export function Toolbar() {
     const last = offsets[offsets.length - 1]
     return last.startMs + blockRowCount(blocks[blocks.length - 1]) * last.msPerRow
   }, [activeTab?.chart.blocks])
+  // Отсортированные времена всех «хитов». Хит — это строка (момент времени), где
+  // есть хотя бы одна активная ячейка: tap, голова/тело/хвост холда (холд даёт хит
+  // на КАЖДУЮ занятую строку). Ноты в одной строке (разные колонки) = один хит.
+  const hitTimes = useMemo(
+    () => (activeTab ? computeHitTimes(activeTab.chart.blocks) : []),
+    [activeTab?.chart.blocks],
+  )
+
   const { openAudio, audioFileName } = useAudio()
 
   // hasAudio() не реактивен, а декод аудио (loadBlob) асинхронный — без этого
@@ -120,6 +167,8 @@ export function Toolbar() {
 
       <TimeDisplay totalMs={totalMs} />
 
+      <NoteCountDisplay hitTimes={hitTimes} />
+
       <div className="flex items-center gap-2">
         <span className="text-muted-foreground text-xs">Scale</span>
         <input
@@ -136,7 +185,22 @@ export function Toolbar() {
       </div>
 
       <div className="flex items-center gap-2">
-        <span className="text-muted-foreground text-xs">Speed</span>
+        <span className="text-muted-foreground text-xs">Zoom</span>
+        <input
+          type="range"
+          min={FIELD_ZOOM_MIN}
+          max={FIELD_ZOOM_MAX}
+          step={FIELD_ZOOM_STEP}
+          value={fieldZoom}
+          onChange={e => setFieldZoom(parseInt(e.target.value, 10))}
+          onMouseUp={e => e.currentTarget.blur()}
+          className="w-24 accent-primary"
+        />
+        <span className="text-xs text-muted-foreground w-10">{fieldZoom}%</span>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <span className="text-muted-foreground text-xs">Rush</span>
         <input
           type="range"
           min={0.5}
@@ -152,6 +216,20 @@ export function Toolbar() {
           className="w-20 accent-primary"
         />
         <span className="text-xs text-muted-foreground w-6">×{playbackRate.toFixed(1)}</span>
+        <button
+          onClick={() => {
+            if (activeTabId) setTabPlaybackRate(activeTabId, 1.0)
+            audioEngine.setPlaybackRate(1.0)
+          }}
+          disabled={playbackRate === 1.0}
+          title="Reset rush to ×1.0"
+          className="w-5 h-5 flex items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M3 8a5 5 0 1 1 1.6 3.7" strokeLinecap="round" />
+            <path d="M3 4.5 V8 H6.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
       </div>
 
       {activeTab && (

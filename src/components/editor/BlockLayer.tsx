@@ -1,5 +1,4 @@
 import { memo } from 'react'
-import { COLUMN_WIDTH } from '@/utils/geometry'
 import { useEditorStore } from '@/store/editorStore'
 import type { Block, Note } from '@/types/chart'
 
@@ -7,8 +6,9 @@ const DIRECTIONS = ['DownLeft', 'UpLeft', 'Center', 'UpRight', 'DownRight']
 
 // Одна нота как спрайт (вместо построчных ячеек). Для холда — единый body на весь
 // пролёт + шапка/кэп по флагам continued/continues (включая кросс-блочные холды).
-function ImageSprite({ note, rh, totalRows, skin, ghost }: { note: Note; rh: number; totalRows: number; skin: string; ghost?: boolean }) {
-  const x = note.col * COLUMN_WIDTH
+// cw — эффективная ширина колонки (= размер ноты) с учётом зума поля.
+function ImageSprite({ note, rh, cw, totalRows, skin, ghost }: { note: Note; rh: number; cw: number; totalRows: number; skin: string; ghost?: boolean }) {
+  const x = note.col * cw
   const dir = DIRECTIONS[note.col % 5]
   const base = `/skin/${skin}`
   const opacity = ghost ? 0.5 : undefined
@@ -19,22 +19,25 @@ function ImageSprite({ note, rh, totalRows, skin, ghost }: { note: Note; rh: num
         src={`${base}/${dir}-Tap-Note.png`}
         draggable={false}
         className="absolute pointer-events-none"
-        style={{ left: x, top: note.row * rh, width: COLUMN_WIDTH, height: COLUMN_WIDTH, transform: 'translateY(-50%)', opacity }}
+        style={{ left: x, top: note.row * rh, width: cw, height: cw, transform: 'translateY(-50%)', opacity }}
       />
     )
   }
 
   const endRow = note.endRow ?? note.row
   const bodyTop = note.row * rh
-  const bodyBot = note.continues ? totalRows * rh : endRow * rh
+  // Хвостовой кэп центрирован на линии хвоста (endRow*rh), как нота на хит-линии.
+  // Тело тянется до ВЕРХНЕЙ грани кэпа (endRow*rh - cw/2), иначе оно просвечивало бы
+  // сквозь полупрозрачную верхнюю часть кэпа.
+  const bodyBot = note.continues ? totalRows * rh : endRow * rh - cw / 2
   return (
     <>
       <div
         className="absolute pointer-events-none"
         style={{
-          left: x, top: bodyTop, width: COLUMN_WIDTH, height: Math.max(0, bodyBot - bodyTop),
+          left: x, top: bodyTop, width: cw, height: Math.max(0, bodyBot - bodyTop),
           backgroundImage: `url(${base}/${dir}-Hold-Body.png)`,
-          backgroundSize: `${COLUMN_WIDTH}px auto`,
+          backgroundSize: `${cw}px auto`,
           backgroundRepeat: 'repeat-y',
           opacity,
         }}
@@ -44,7 +47,7 @@ function ImageSprite({ note, rh, totalRows, skin, ghost }: { note: Note; rh: num
           src={`${base}/${dir}-Hold-BottomCap.png`}
           draggable={false}
           className="absolute pointer-events-none"
-          style={{ left: x, top: endRow * rh, width: COLUMN_WIDTH, height: COLUMN_WIDTH, opacity }}
+          style={{ left: x, top: endRow * rh, width: cw, height: cw, transform: 'translateY(-50%)', opacity }}
         />
       )}
       {!note.continued && (
@@ -52,36 +55,39 @@ function ImageSprite({ note, rh, totalRows, skin, ghost }: { note: Note; rh: num
           src={`${base}/${dir}-Tap-Note.png`}
           draggable={false}
           className="absolute pointer-events-none"
-          style={{ left: x, top: note.row * rh, width: COLUMN_WIDTH, height: COLUMN_WIDTH, transform: 'translateY(-50%)', opacity, zIndex: 1 }}
+          style={{ left: x, top: note.row * rh, width: cw, height: cw, transform: 'translateY(-50%)', opacity, zIndex: 1 }}
         />
       )}
     </>
   )
 }
 
-function BlocksSprite({ note, rh, totalRows, ghost }: { note: Note; rh: number; totalRows: number; ghost?: boolean }) {
-  const x = note.col * COLUMN_WIDTH
+function BlocksSprite({ note, rh, cw, totalRows, ghost }: { note: Note; rh: number; cw: number; totalRows: number; ghost?: boolean }) {
+  const x = note.col * cw
   const opacity = ghost ? 0.5 : undefined
 
   if (note.type === 'tap') {
     return (
       <div
         className="absolute rounded-sm bg-blue-400 border border-blue-300 shadow-sm pointer-events-none"
-        style={{ left: x + 1, top: note.row * rh, width: COLUMN_WIDTH - 2, height: rh, opacity }}
+        style={{ left: x + 1, top: note.row * rh, width: cw - 2, height: rh, transform: 'translateY(-50%)', opacity }}
       />
     )
   }
 
   const endRow = note.endRow ?? note.row
-  const top = note.row * rh
-  const bot = note.continues ? totalRows * rh : (endRow + 1) * rh
+  // Холд как объединение ячеек, центрированных на линиях: от верхней грани стартовой
+  // ячейки (row*rh - rh/2) до нижней грани конечной (endRow*rh + rh/2). Кросс-блочные
+  // края (continued/continues) — впритык к границе блока, чтобы шов был бесшовным.
+  const top = note.continued ? 0 : note.row * rh - rh / 2
+  const bot = note.continues ? totalRows * rh : endRow * rh + rh / 2
   const roundTop = !note.continued
   const roundBot = !note.continues
   return (
     <div
       className="absolute bg-green-600 border-x border-green-400 pointer-events-none"
       style={{
-        left: x + 1, top, width: COLUMN_WIDTH - 2, height: Math.max(0, bot - top), opacity,
+        left: x + 1, top, width: cw - 2, height: Math.max(0, bot - top), opacity,
         borderTopWidth: roundTop ? 1 : 0,
         borderBottomWidth: roundBot ? 1 : 0,
         borderTopLeftRadius: roundTop ? 2 : 0,
@@ -97,6 +103,7 @@ interface Props {
   block: Block
   startY: number
   rh: number
+  cw: number
   totalRows: number
   height: number
   notesWidth: number
@@ -106,7 +113,7 @@ interface Props {
 // Один блок: только ноты (сетка вынесена в отдельный GridBlock-слой). Мемоизирован
 // и не зависит от прокрутки — во время playback не ре-рендерится вовсе (двигается
 // только transform родителя).
-export const BlockLayer = memo(function BlockLayer({ block, startY, rh, totalRows, height, notesWidth, previewNote }: Props) {
+export const BlockLayer = memo(function BlockLayer({ block, startY, rh, cw, totalRows, height, notesWidth, previewNote }: Props) {
   const skin = useEditorStore(s => s.activeSkin)
   const isBlocks = skin === 'blocks'
 
@@ -114,12 +121,12 @@ export const BlockLayer = memo(function BlockLayer({ block, startY, rh, totalRow
     <div className="absolute left-0" style={{ top: startY, width: notesWidth, height }}>
       {block.notes.map((note, i) =>
         isBlocks
-          ? <BlocksSprite key={i} note={note} rh={rh} totalRows={totalRows} />
-          : <ImageSprite key={i} note={note} rh={rh} totalRows={totalRows} skin={skin} />
+          ? <BlocksSprite key={i} note={note} rh={rh} cw={cw} totalRows={totalRows} />
+          : <ImageSprite key={i} note={note} rh={rh} cw={cw} totalRows={totalRows} skin={skin} />
       )}
       {previewNote && (isBlocks
-        ? <BlocksSprite note={previewNote} rh={rh} totalRows={totalRows} ghost />
-        : <ImageSprite note={previewNote} rh={rh} totalRows={totalRows} skin={skin} ghost />)}
+        ? <BlocksSprite note={previewNote} rh={rh} cw={cw} totalRows={totalRows} ghost />
+        : <ImageSprite note={previewNote} rh={rh} cw={cw} totalRows={totalRows} skin={skin} ghost />)}
     </div>
   )
 })
