@@ -4,11 +4,27 @@ import { useEditorStore } from '@/store/editorStore'
 import { audioEngine } from '@/services/audioEngine'
 import { ChartGrid } from './ChartGrid'
 import { WelcomeScreen } from './WelcomeScreen'
+import { useHitSounds } from '@/hooks/useHitSounds'
+
+// Поле ввода текста (где пробел/горячие клавиши должны работать как обычно), в
+// отличие от управляющих контролов вроде range/checkbox/button — на них пробел
+// обязан доставаться play/pause (см. инвариант тулбара в onKeyDown ниже).
+const TEXT_INPUT_TYPES = ['text', 'number', 'search', 'email', 'url', 'tel', 'password']
+function isTextEntry(el: HTMLElement): boolean {
+  if (el.isContentEditable) return true
+  const tag = el.tagName
+  if (tag === 'TEXTAREA' || tag === 'SELECT') return true
+  if (tag === 'INPUT') return TEXT_INPUT_TYPES.includes((el as HTMLInputElement).type)
+  return false
+}
 
 export function ChartEditor() {
   const { tabs, activeTabId } = useTabsStore()
   const { isPlaying, currentTime, setPlaying, setCurrentTime } = useEditorStore()
   const activeTab = tabs.find(t => t.id === activeTabId)
+
+  // Озвучка нот у курсора (сам хук внутри проверяет флаг/воспроизведение).
+  useHitSounds()
 
   useEffect(() => {
     audioEngine.setPlaybackRate(activeTab?.playbackRate ?? 1.0)
@@ -17,7 +33,12 @@ export function ChartEditor() {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement
-      const inInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT'
+      // Инвариант: НИ ОДНА настройка в тулбаре (слайдеры, чекбоксы, кнопки) не должна
+      // перехватывать пробел — он всегда play/pause. Поэтому «инпутом» считаем только
+      // поля ВВОДА ТЕКСТА (text/number/textarea/select/contenteditable); range,
+      // checkbox, radio, button и т.п. — нет, и пробел на них уходит в play/pause
+      // (preventDefault ниже гасит нативное действие контрола, напр. тогл чекбокса).
+      const inInput = isTextEntry(target)
 
       if (e.code === 'Space' && !inInput) {
         e.preventDefault()

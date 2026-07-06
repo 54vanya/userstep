@@ -44,6 +44,9 @@ export interface ViewSettings {
   fieldZoom: number
   showNoteCounter: boolean
   railColoring: RailColoring
+  rhythmColoring: boolean
+  hitSounds: boolean
+  musicVolume: number
 }
 
 const DEFAULTS: ViewSettings = {
@@ -55,6 +58,14 @@ const DEFAULTS: ViewSettings = {
   fieldZoom: 100,
   showNoteCounter: false,
   railColoring: 'none',
+  rhythmColoring: false,
+  hitSounds: false,
+  musicVolume: 1,
+}
+
+export function clampVolume(v: unknown): number {
+  if (typeof v !== 'number' || !isFinite(v)) return DEFAULTS.musicVolume
+  return Math.min(1, Math.max(0, v))
 }
 
 export function clampFieldZoom(z: unknown): number {
@@ -82,6 +93,10 @@ export function loadViewSettings(): ViewSettings {
       railColoring: RAIL_COLORINGS.includes(parsed.railColoring as RailColoring)
         ? (parsed.railColoring as RailColoring)
         : DEFAULTS.railColoring,
+      rhythmColoring:
+        typeof parsed.rhythmColoring === 'boolean' ? parsed.rhythmColoring : DEFAULTS.rhythmColoring,
+      hitSounds: typeof parsed.hitSounds === 'boolean' ? parsed.hitSounds : DEFAULTS.hitSounds,
+      musicVolume: clampVolume(parsed.musicVolume),
     }
   } catch {
     return { ...DEFAULTS }

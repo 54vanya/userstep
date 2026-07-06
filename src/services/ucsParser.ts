@@ -66,13 +66,13 @@ function parseRawBlocks(lines: string[]): { mode: ChartMode; rawBlocks: RawBlock
 // carryOver: cols with active holds from previous block (mutated in-place)
 function rowsToNotes(rows: string[], carryOver: Map<number, boolean>): Note[] {
   const notes: Note[] = []
-  // col -> { startRow, continued, lastActiveRow }
-  // lastActiveRow: last row index where M or H appeared (-1 = none seen yet in this block)
-  const holdStarts = new Map<number, { row: number; continued: boolean; lastActiveRow: number }>()
+  // Открытый холд по колонке. Холд завершается ТОЛЬКО по 'W'; промежуточные 'H' —
+  // тело, хвостовые '.' и пустые блоки его НЕ обрывают (см. гиммики CS241).
+  const holdStarts = new Map<number, { row: number; continued: boolean }>()
 
   // Seed holds carried over from previous block
   carryOver.forEach((_, col) => {
-    holdStarts.set(col, { row: 0, continued: true, lastActiveRow: -1 })
+    holdStarts.set(col, { row: 0, continued: true })
   })
   carryOver.clear()
 
@@ -83,10 +83,7 @@ function rowsToNotes(rows: string[], carryOver: Map<number, boolean>): Note[] {
       if (ch === 'X') {
         notes.push({ row, col, type: 'tap' })
       } else if (ch === 'M') {
-        holdStarts.set(col, { row, continued: false, lastActiveRow: row })
-      } else if (ch === 'H') {
-        const hold = holdStarts.get(col)
-        if (hold) holdStarts.set(col, { ...hold, lastActiveRow: row })
+        holdStarts.set(col, { row, continued: false })
       } else if (ch === 'W') {
         const hold = holdStarts.get(col)
         if (hold !== undefined) {
@@ -96,28 +93,18 @@ function rowsToNotes(rows: string[], carryOver: Map<number, boolean>): Note[] {
           holdStarts.delete(col)
         }
       }
+      // 'H' — тело холда; отдельно не трекаем (диапазон row..endRow подразумевает его).
     }
   }
 
-  // Holds still open at block end
+  // Холды, открытые на конце блока (W не встретился): тянутся до конца блока и
+  // продолжаются дальше (continues) — сквозь хвостовые '.' и пустые блоки, пока не
+  // встретят 'W'. Так длинная нота не рвётся на промежуточных пустых строках/блоках.
   holdStarts.forEach((hold, col) => {
-    const lastActive = hold.lastActiveRow
-    // Continued hold без единого H/W в этом блоке (например пустой блок-распорка в
-    // BPM-гиммике): тело проходит СКВОЗЬ весь блок, держим перенос в следующий.
-    // Иначе цепочка холда рвалась на промежуточном пустом блоке.
-    if (lastActive < 0) {
-      const note: Note = { row: hold.row, col, type: 'hold', endRow: Math.max(0, rows.length - 1), continued: true, continues: true }
-      notes.push(note)
-      carryOver.set(col, true)
-      return
-    }
-    const endRow = lastActive
-    const crossesBlockEnd = endRow === rows.length - 1
-    const note: Note = { row: hold.row, col, type: 'hold', endRow }
+    const note: Note = { row: hold.row, col, type: 'hold', endRow: Math.max(0, rows.length - 1), continues: true }
     if (hold.continued) note.continued = true
-    if (crossesBlockEnd) note.continues = true
     notes.push(note)
-    if (crossesBlockEnd) carryOver.set(col, true)
+    carryOver.set(col, true)
   })
 
   return notes

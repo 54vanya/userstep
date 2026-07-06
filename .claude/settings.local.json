@@ -4,7 +4,15 @@
       "Bash(pnpm add *)",
       "Bash(npx tsc *)",
       "Bash(npm install *)",
-      "Bash(pnpm e2e *)"
+      "Bash(pnpm e2e *)",
+      "Bash(mdls *)",
+      "Bash(python3 -c ' *)",
+      "Bash(sips --help)",
+      "Bash(osascript *)",
+      "Bash(brew --version)",
+      "Bash(brew install *)",
+      "Bash(python3 -m venv /private/tmp/claude-501/-Users-ivananisimov-Desktop-own-userstep/9e1a84f4-9699-4a09-9533-d27f786b0ff5/scratchpad/venv)",
+      "Bash(/private/tmp/claude-501/-Users-ivananisimov-Desktop-own-userstep/9e1a84f4-9699-4a09-9533-d27f786b0ff5/scratchpad/venv/bin/pip -q install dnfile dncil)"
     ]
   }
 }

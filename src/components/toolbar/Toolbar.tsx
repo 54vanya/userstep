@@ -97,7 +97,7 @@ function NoteCountDisplay({ hitTimes }: { hitTimes: number[] }) {
 
 export function Toolbar() {
   const { tabs, activeTabId, setTabScale, setTabPlaybackRate } = useTabsStore()
-  const { isPlaying, currentTime, setPlaying, setCurrentTime, fieldZoom, setFieldZoom } = useEditorStore()
+  const { isPlaying, currentTime, setPlaying, setCurrentTime, fieldZoom, setFieldZoom, rhythmColoring, setRhythmColoring, hitSounds, setHitSounds, musicVolume, setMusicVolume } = useEditorStore()
   const activeTab = tabs.find(t => t.id === activeTabId)
 
   const totalMs = useMemo(() => {
@@ -128,6 +128,12 @@ export function Toolbar() {
     refresh()
     return () => audioEngine.off('load', refresh)
   }, [activeTabId])
+
+  // Применяем громкость музыки к движку: на mount (восстановление сохранённого
+  // значения) и при каждом изменении. setVolume не создаёт AudioContext заранее.
+  useEffect(() => {
+    audioEngine.setVolume(musicVolume)
+  }, [musicVolume])
 
   const scale = activeTab?.scale ?? 3
   const playbackRate = activeTab?.playbackRate ?? 1.0
@@ -174,7 +180,7 @@ export function Toolbar() {
         <input
           type="range"
           min={1}
-          max={10}
+          max={15}
           step={0.1}
           value={scale}
           onChange={e => activeTabId && setTabScale(activeTabId, parseFloat(e.target.value))}
@@ -231,6 +237,48 @@ export function Toolbar() {
           </svg>
         </button>
       </div>
+
+      <div className="flex items-center gap-2">
+        <span className="text-muted-foreground text-xs">Volume</span>
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.01}
+          value={musicVolume}
+          onChange={e => setMusicVolume(parseFloat(e.target.value))}
+          onMouseUp={e => e.currentTarget.blur()}
+          className="w-20 accent-primary"
+          title="Music volume (does not affect hit sounds)"
+        />
+        <span className="text-xs text-muted-foreground w-8">{Math.round(musicVolume * 100)}%</span>
+      </div>
+
+      <label
+        className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none whitespace-nowrap"
+        title="Color notes by rhythm beat (like in StepMania)"
+      >
+        <input
+          type="checkbox"
+          checked={rhythmColoring}
+          onChange={e => setRhythmColoring(e.target.checked)}
+          className="accent-primary"
+        />
+        Note colors
+      </label>
+
+      <label
+        className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none whitespace-nowrap"
+        title="Beep when notes reach the top line during playback (pitch varies by rhythm)"
+      >
+        <input
+          type="checkbox"
+          checked={hitSounds}
+          onChange={e => setHitSounds(e.target.checked)}
+          className="accent-primary"
+        />
+        Hit sounds
+      </label>
 
       {activeTab && (
         <button

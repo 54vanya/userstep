@@ -13,6 +13,9 @@ interface EditorStore {
   fieldZoom: number
   showNoteCounter: boolean
   railColoring: RailColoring
+  rhythmColoring: boolean
+  hitSounds: boolean
+  musicVolume: number
   theme: Theme
 
   setPlaying: (playing: boolean) => void
@@ -25,6 +28,9 @@ interface EditorStore {
   setFieldZoom: (zoom: number) => void
   setShowNoteCounter: (show: boolean) => void
   setRailColoring: (mode: RailColoring) => void
+  setRhythmColoring: (on: boolean) => void
+  setHitSounds: (on: boolean) => void
+  setMusicVolume: (v: number) => void
   setTheme: (theme: Theme) => void
 }
 
@@ -41,6 +47,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   fieldZoom: _view.fieldZoom,
   showNoteCounter: _view.showNoteCounter,
   railColoring: _view.railColoring,
+  rhythmColoring: _view.rhythmColoring,
+  hitSounds: _view.hitSounds,
+  musicVolume: _view.musicVolume,
   theme: loadTheme(),
 
   setPlaying: (isPlaying) => set({ isPlaying }),
@@ -53,10 +62,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   setFieldZoom: (zoom) => { set({ fieldZoom: clampFieldZoom(zoom) }); persistView(get) },
   setShowNoteCounter: (showNoteCounter) => { set({ showNoteCounter }); persistView(get) },
   setRailColoring: (railColoring) => { set({ railColoring }); persistView(get) },
+  setRhythmColoring: (rhythmColoring) => { set({ rhythmColoring }); persistView(get) },
+  setHitSounds: (hitSounds) => { set({ hitSounds }); persistView(get) },
+  setMusicVolume: (musicVolume) => { set({ musicVolume }); persistView(get) },
   setTheme: (theme) => { applyTheme(theme); set({ theme }) },
 }))
 
 function persistView(get: () => EditorStore): void {
-  const { showColumnDividers, showRowLines, activeSkin, showFps, playbackMode, fieldZoom, showNoteCounter, railColoring } = get()
-  saveViewSettings({ showColumnDividers, showRowLines, activeSkin, showFps, playbackMode, fieldZoom, showNoteCounter, railColoring })
+  const { showColumnDividers, showRowLines, activeSkin, showFps, playbackMode, fieldZoom, showNoteCounter, railColoring, rhythmColoring, hitSounds, musicVolume } = get()
+  saveViewSettings({ showColumnDividers, showRowLines, activeSkin, showFps, playbackMode, fieldZoom, showNoteCounter, railColoring, rhythmColoring, hitSounds, musicVolume })
 }
