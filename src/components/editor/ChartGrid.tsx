@@ -43,12 +43,17 @@ export function ChartGrid() {
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const [containerH, setContainerH] = useState(600)
+  const [containerW, setContainerW] = useState(0)
 
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
     setContainerH(el.clientHeight)
-    const ro = new ResizeObserver(() => setContainerH(el.clientHeight))
+    setContainerW(el.clientWidth)
+    const ro = new ResizeObserver(() => {
+      setContainerH(el.clientHeight)
+      setContainerW(el.clientWidth)
+    })
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
@@ -75,6 +80,7 @@ export function ChartGrid() {
       blockLayouts={blockLayouts}
       scrollRef={scrollRef}
       containerH={containerH}
+      containerW={containerW}
       cols={cols}
       scale={scale}
       activeTabId={activeTabId}
@@ -86,6 +92,7 @@ interface InnerProps {
   blockLayouts: BlockLayout[]
   scrollRef: React.RefObject<HTMLDivElement | null>
   containerH: number
+  containerW: number
   cols: number
   scale: number
   activeTabId: string | null
@@ -95,6 +102,7 @@ function ChartGridInner({
   blockLayouts,
   scrollRef,
   containerH,
+  containerW,
   cols,
   scale,
   activeTabId,
@@ -109,6 +117,7 @@ function ChartGridInner({
   const showRowLines = useEditorStore(s => s.showRowLines)
   const fieldZoom = useEditorStore(s => s.fieldZoom)
   const showNoteCounter = useEditorStore(s => s.showNoteCounter)
+  const fieldAlign = useEditorStore(s => s.fieldAlign)
   const railColoring = useEditorStore(s => s.railColoring)
   const selection = useEditorStore(s => s.selection)
   const setSelection = useEditorStore(s => s.setSelection)
@@ -116,6 +125,12 @@ function ChartGridInner({
   // отвечает лишь за расстояние между строками).
   const cw = (COLUMN_WIDTH * fieldZoom) / 100
   const cursorY = (CURSOR_LINE_Y * fieldZoom) / 100
+  // Горизонтальный сдвиг поля при выравнивании по центру: свободное место вьюпорта
+  // делится пополам (когда поле шире вьюпорта — 0, поведение как при left).
+  // Сдвигается content-слой, заголовки колонок, комбо-оверлей; хит-тесты и попап
+  // блока учитывают его же.
+  const fieldOffsetX =
+    fieldAlign === 'center' ? Math.max(0, Math.floor((containerW - (cols * cw + RAIL_WIDTH)) / 2)) : 0
   const { addBlock, updateBlock } = useChart()
   // Стабильная ссылка для BlockRail (иначе memo бесполезен — addBlock новый каждый рендер).
   const addBlockRef = useRef(addBlock)
@@ -193,13 +208,13 @@ function ChartGridInner({
     const layout = blockLayouts.find(l => l.block.id === blockId)
     if (!layout) return
     const blockScreenTop = rect.top + cursorY + layout.startY - scrollEl.scrollTop
-    const railRight = rect.left + cols * cw + RAIL_WIDTH - scrollEl.scrollLeft
+    const railRight = rect.left + fieldOffsetX + cols * cw + RAIL_WIDTH - scrollEl.scrollLeft
     let left = railRight + 8
     if (left + BLOCK_POPUP_WIDTH > window.innerWidth - 8) {
       left = railRight - BLOCK_POPUP_WIDTH - 8
     }
     setPopupPos({ top: blockScreenTop, left: Math.max(8, left), editorTop: rect.top, editorBottom: rect.bottom })
-  }, [openBlockId, blockLayouts, scrollRef, cols, cw, cursorY])
+  }, [openBlockId, blockLayouts, scrollRef, cols, cw, cursorY, fieldOffsetX])
 
   // Оффсеты блоков — один раз на изменение чарта/масштаба: их пересчёт на каждый
   // mousemove/scroll аллоцировал массив по всем блокам ради одного элемента.
@@ -253,10 +268,10 @@ function ChartGridInner({
     if (!el) return null
     const rect = el.getBoundingClientRect()
     return {
-      px: clientX - rect.left,
+      px: clientX - rect.left - fieldOffsetX,
       py: clientY - rect.top + scrollOffset() - cursorY,
     }
-  }, [scrollRef, scrollOffset, cursorY])
+  }, [scrollRef, scrollOffset, cursorY, fieldOffsetX])
 
   // Ctrl+колесо — зум поля (как в StepEdit Lite). Нужен нативный non-passive
   // listener: React вешает onWheel пассивно, preventDefault не сработал бы и
@@ -448,8 +463,8 @@ function ChartGridInner({
 
   return (
     <div className="relative flex flex-col h-full overflow-hidden">
-      {showNoteCounter && <NoteCounterOverlay hitTimes={counterHitTimes} width={notesWidth} />}
-      <div className="flex shrink-0">
+      {showNoteCounter && <NoteCounterOverlay hitTimes={counterHitTimes} width={notesWidth} left={fieldOffsetX} />}
+      <div className="flex shrink-0" style={{ paddingLeft: fieldOffsetX }}>
         <ColumnHeaders cols={cols} cw={cw} />
         <div className="shrink-0 border-b border-l border-grid-beat bg-card" style={{ width: RAIL_WIDTH, height: 32 }} />
       </div>
@@ -477,7 +492,7 @@ function ChartGridInner({
       >
         <Cursor cursorY={cursorY} />
         <div style={{ height: cursorY, flexShrink: 0 }} />
-        <div ref={contentRef} style={{ position: 'relative', height: totalHeight, width: notesWidth + RAIL_WIDTH }}>
+        <div ref={contentRef} style={{ position: 'relative', height: totalHeight, width: notesWidth + RAIL_WIDTH, marginLeft: fieldOffsetX }}>
           {railColoring !== 'none' && (
             <div className="absolute left-0 top-0 pointer-events-none" style={{ width: notesWidth, height: totalHeight }}>
               {blockLayouts.map(({ block, startY, endY }, i) => {

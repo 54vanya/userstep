@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { loadTheme, applyTheme, type Theme } from '@/utils/theme'
-import { loadViewSettings, saveViewSettings, clampFieldZoom, type PlaybackMode, type RailColoring, type LiveKeyLayout } from '@/utils/viewSettings'
+import { loadViewSettings, saveViewSettings, clampFieldZoom, type PlaybackMode, type RailColoring, type LiveKeyLayout, type FieldAlign } from '@/utils/viewSettings'
 
 // Выделение (модель StepEdit Lite, два уровня):
 // rows  — диапазон строк ОДНОГО блока, все колонки; операции фазы 3 (delete/copy/
@@ -21,6 +21,7 @@ interface EditorStore {
   playbackMode: PlaybackMode
   playbackFpsCap: boolean
   fieldZoom: number
+  fieldAlign: FieldAlign
   showNoteCounter: boolean
   railColoring: RailColoring
   liveKeyLayout: LiveKeyLayout
@@ -40,6 +41,7 @@ interface EditorStore {
   setPlaybackMode: (mode: PlaybackMode) => void
   setPlaybackFpsCap: (on: boolean) => void
   setFieldZoom: (zoom: number) => void
+  setFieldAlign: (align: FieldAlign) => void
   setShowNoteCounter: (show: boolean) => void
   setRailColoring: (mode: RailColoring) => void
   setLiveKeyLayout: (layout: LiveKeyLayout) => void
@@ -63,6 +65,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   playbackMode: _view.playbackMode,
   playbackFpsCap: _view.playbackFpsCap,
   fieldZoom: _view.fieldZoom,
+  fieldAlign: _view.fieldAlign,
   showNoteCounter: _view.showNoteCounter,
   railColoring: _view.railColoring,
   liveKeyLayout: _view.liveKeyLayout,
@@ -82,6 +85,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   setPlaybackMode: (playbackMode) => { set({ playbackMode }); persistView(get) },
   setPlaybackFpsCap: (playbackFpsCap) => { set({ playbackFpsCap }); persistView(get) },
   setFieldZoom: (zoom) => { set({ fieldZoom: clampFieldZoom(zoom) }); persistView(get) },
+  setFieldAlign: (fieldAlign) => { set({ fieldAlign }); persistView(get) },
   setShowNoteCounter: (showNoteCounter) => { set({ showNoteCounter }); persistView(get) },
   setRailColoring: (railColoring) => { set({ railColoring }); persistView(get) },
   setLiveKeyLayout: (liveKeyLayout) => { set({ liveKeyLayout }); persistView(get) },
@@ -93,6 +97,6 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 }))
 
 function persistView(get: () => EditorStore): void {
-  const { showColumnDividers, showRowLines, activeSkin, showFps, playbackMode, playbackFpsCap, fieldZoom, showNoteCounter, railColoring, liveKeyLayout, rhythmColoring, hitSounds, metronome, musicVolume } = get()
-  saveViewSettings({ showColumnDividers, showRowLines, activeSkin, showFps, playbackMode, playbackFpsCap, fieldZoom, showNoteCounter, railColoring, liveKeyLayout, rhythmColoring, hitSounds, metronome, musicVolume })
+  const { showColumnDividers, showRowLines, activeSkin, showFps, playbackMode, playbackFpsCap, fieldZoom, fieldAlign, showNoteCounter, railColoring, liveKeyLayout, rhythmColoring, hitSounds, metronome, musicVolume } = get()
+  saveViewSettings({ showColumnDividers, showRowLines, activeSkin, showFps, playbackMode, playbackFpsCap, fieldZoom, fieldAlign, showNoteCounter, railColoring, liveKeyLayout, rhythmColoring, hitSounds, metronome, musicVolume })
 }

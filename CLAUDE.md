@@ -30,7 +30,7 @@ PWA: vite-plugin-pwa (Workbox), ручное обновление через `us
 - **Тулбар**: play, per-tab Scale, Zoom поля (50–300%), Rush 0.2–4×, Volume, счётчик нот (`utils/noteCount.ts`), чекбоксы Rhythm coloring / Hit sounds / Metronome
 - **Звуковой ассист** (`utils/hitSounds.ts` + `useHitSounds`): бипы по нотам у курсора (высота зависит от доли) и метроном по долям; планируются наперёд через `audioEngine.scheduleBeep`, идут мимо musicGain (слайдер Volume на них не влияет)
 - **Ритм-окраска** (`utils/rhythmColors.ts`): цвет ноты по доле (4-я/8-я/16-я…), перекраска спрайта через `mix-blend-mode:color` по маске (BlockLayer)
-- **View-настройки** (`utils/viewSettings.ts`, localStorage `piu-view-settings`): линии сетки, скин (basic/blocks), FPS-метр, счётчик нот, окраска секций рельсы, раскладка live-записи, режим playback (+ кап 60 FPS для записи видео), зум, звуки; тема (system/light/dark) — отдельно в `utils/theme.ts`
+- **View-настройки** (`utils/viewSettings.ts`, localStorage `piu-view-settings`): линии сетки, скин (basic/blocks), FPS-метр, счётчик нот, окраска секций рельсы, раскладка live-записи, режим playback (+ кап 60 FPS для записи видео), зум, выравнивание поля (left/center, сдвигает и комбо-оверлей), звуки; тема (system/light/dark) — отдельно в `utils/theme.ts`
 - **Difficulty**: цифровая 1–29, без именованных уровней
 - **Delay**: ненулевой для первого блока (тишина до старта) или паузы между блоками; сериализатор сохраняет delay всех блоков
 - **AudioEngine** (singleton): `resume()` suspended-контекста при play (автоплей-политика после восстановления сессии), счётчик поколений `loadBlob` против гонки декодирования при переключении табов, фиксация позиции в `onended`

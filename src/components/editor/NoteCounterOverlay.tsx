@@ -5,8 +5,9 @@ import { countPassed } from '@/utils/noteCount'
 
 // Полупрозрачное текущее число нот (combo-стиль) по центру поля поверх нот.
 // Обновляется по RAF, без React-ререндеров каждый кадр. width — ширина зоны стрелок
-// (cols*cw), чтобы число центрировалось по стрелкам, а не по всему контейнеру с рейлом.
-export function NoteCounterOverlay({ hitTimes, width }: { hitTimes: number[]; width: number }) {
+// (cols*cw), чтобы число центрировалось по стрелкам, а не по всему контейнеру с рейлом;
+// left — сдвиг поля при выравнивании по центру (View → Field alignment).
+export function NoteCounterOverlay({ hitTimes, width, left = 0 }: { hitTimes: number[]; width: number; left?: number }) {
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
     let rafId: number
@@ -28,8 +29,8 @@ export function NoteCounterOverlay({ hitTimes, width }: { hitTimes: number[]; wi
 
   return (
     <div
-      className="absolute left-0 top-8 bottom-0 flex items-center justify-center pointer-events-none z-30 select-none"
-      style={{ width }}
+      className="absolute top-8 bottom-0 flex items-center justify-center pointer-events-none z-30 select-none"
+      style={{ width, left }}
     >
       <div
         ref={ref}

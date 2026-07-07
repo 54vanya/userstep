@@ -23,6 +23,12 @@ const RAIL_COLORINGS: RailColoring[] = ['none', 'mono', 'color']
 export type LiveKeyLayout = 'ucs' | 'stepmania'
 const LIVE_KEY_LAYOUTS: LiveKeyLayout[] = ['ucs', 'stepmania']
 
+// Выравнивание области редактирования (поле+рельса) в свободном пространстве
+// вьюпорта: left — прижато влево (классика StepEdit Lite), center — по центру.
+// Комбо-оверлей (счётчик нот) сдвигается вместе с полем.
+export type FieldAlign = 'left' | 'center'
+const FIELD_ALIGNS: FieldAlign[] = ['left', 'center']
+
 // Тинт через одну [чётный, нечётный]. Полупрозрачные — корректны на светлой и тёмной
 // теме; применяются и к рейлу, и к фону поля редактора. undefined = базовый фон.
 const SECTION_TINTS: Record<RailColoring, [string | undefined, string | undefined]> = {
@@ -53,6 +59,7 @@ export interface ViewSettings {
   // второй кадр, движение в 60fps-записи ровное.
   playbackFpsCap: boolean
   fieldZoom: number
+  fieldAlign: FieldAlign
   showNoteCounter: boolean
   railColoring: RailColoring
   liveKeyLayout: LiveKeyLayout
@@ -70,6 +77,7 @@ const DEFAULTS: ViewSettings = {
   playbackMode: 'snap',
   playbackFpsCap: false,
   fieldZoom: 100,
+  fieldAlign: 'left',
   showNoteCounter: false,
   railColoring: 'none',
   liveKeyLayout: 'ucs',
@@ -107,6 +115,9 @@ export function loadViewSettings(): ViewSettings {
       playbackFpsCap:
         typeof parsed.playbackFpsCap === 'boolean' ? parsed.playbackFpsCap : DEFAULTS.playbackFpsCap,
       fieldZoom: clampFieldZoom(parsed.fieldZoom),
+      fieldAlign: FIELD_ALIGNS.includes(parsed.fieldAlign as FieldAlign)
+        ? (parsed.fieldAlign as FieldAlign)
+        : DEFAULTS.fieldAlign,
       showNoteCounter: typeof parsed.showNoteCounter === 'boolean' ? parsed.showNoteCounter : DEFAULTS.showNoteCounter,
       railColoring: RAIL_COLORINGS.includes(parsed.railColoring as RailColoring)
         ? (parsed.railColoring as RailColoring)

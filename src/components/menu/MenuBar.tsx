@@ -108,6 +108,7 @@ export function MenuBar() {
     liveKeyLayout, setLiveKeyLayout,
     playbackMode, setPlaybackMode,
     playbackFpsCap, setPlaybackFpsCap,
+    fieldAlign, setFieldAlign,
     theme, setTheme,
   } = useEditorStore()
 
@@ -145,6 +146,10 @@ export function MenuBar() {
         <Toggle on={showRowLines} onToggle={() => setShowRowLines(!showRowLines)}>Row lines</Toggle>
         <Toggle on={showFps} onToggle={() => setShowFps(!showFps)}>Show FPS</Toggle>
         <Toggle on={showNoteCounter} onToggle={() => setShowNoteCounter(!showNoteCounter)}>Note counter overlay</Toggle>
+        <Separator />
+        <SectionLabel>Field alignment</SectionLabel>
+        <Radio on={fieldAlign === 'left'} onSelect={() => setFieldAlign('left')}>Left</Radio>
+        <Radio on={fieldAlign === 'center'} onSelect={() => setFieldAlign('center')}>Center</Radio>
         <Separator />
         <SectionLabel>Section colors</SectionLabel>
         <Radio on={railColoring === 'none'} onSelect={() => setRailColoring('none')}>None</Radio>
