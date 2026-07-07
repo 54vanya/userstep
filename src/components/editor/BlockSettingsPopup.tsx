@@ -175,21 +175,21 @@ export function BlockSettingsPopup({ blockId, index, top, left, editorTop, edito
               <ActionButton
                 disabled={!canCut}
                 onClick={() => splitBlockAt(blockId, targetRow!)}
-                title="Разрезать блок на два по строке выделения/плейхеда"
+                title="Split the block in two at the selection/playhead row"
               >
                 Split here{canCut ? ` (row ${targetRow})` : ''}
               </ActionButton>
               <ActionButton
                 disabled={isLast}
                 onClick={() => mergeWithNext(blockId)}
-                title="Слить со следующим блоком (свойства — от этого блока)"
+                title="Merge with the next block (properties come from this block)"
               >
                 Merge with next
               </ActionButton>
               <ActionButton
                 disabled={!canCut}
                 onClick={() => deleteBelow(blockId, targetRow!)}
-                title="Удалить всё ниже строки выделения/плейхеда"
+                title="Delete everything below the selection/playhead row"
               >
                 Delete below{canCut ? ` (row ${targetRow})` : ''}
               </ActionButton>

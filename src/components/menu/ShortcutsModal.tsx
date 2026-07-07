@@ -38,78 +38,78 @@ interface Section {
 
 const SECTIONS: Section[] = [
   {
-    title: 'Воспроизведение',
+    title: 'Playback',
     rows: [
       ['Space', 'Play / pause'],
     ],
-    note: 'Работает везде, кроме фокуса в текстовом поле. Rush 0.2×–4× — слайдер в тулбаре.',
+    note: 'Works everywhere except when a text field is focused. Rush 0.2×–4× — slider in the toolbar.',
   },
   {
-    title: 'Файлы и вкладки',
+    title: 'Files & tabs',
     rows: [
-      ['Ctrl+S', 'Сохранить .piu.json (с настройками редактора)'],
-      ['Ctrl+N', 'Новая вкладка'],
-      ['Ctrl+O', 'Импорт .ucs'],
-      ['Ctrl+W', 'Закрыть вкладку (confirm при несохранённом)'],
-      ['Ctrl+Tab / Ctrl+Shift+Tab', 'Следующая / предыдущая вкладка'],
+      ['Ctrl+S', 'Save .piu.json (with editor settings)'],
+      ['Ctrl+N', 'New tab'],
+      ['Ctrl+O', 'Import .ucs'],
+      ['Ctrl+W', 'Close tab (confirms if unsaved)'],
+      ['Ctrl+Tab / Ctrl+Shift+Tab', 'Next / previous tab'],
     ],
-    note: 'В браузерной вкладке Ctrl+N/W/Tab заняты браузером — полноценно работают в установленном PWA. Файлы можно просто перетаскивать в окно (.ucs, .piu.json, аудио).',
+    note: 'In a browser tab Ctrl+N/W/Tab are reserved by the browser — they fully work in the installed PWA. Files can simply be dropped onto the window (.ucs, .piu.json, audio).',
   },
   {
     title: 'Undo / redo',
     rows: [
-      ['Ctrl+Z', 'Undo (глубина 50)'],
+      ['Ctrl+Z', 'Undo (50 steps)'],
       ['Ctrl+Y / Ctrl+Shift+Z', 'Redo'],
     ],
   },
   {
-    title: 'Навигация',
+    title: 'Navigation',
     rows: [
-      ['↑ / ↓', 'На строку (по сетке блока под курсором)'],
-      ['PgUp / PgDn', 'На страницу'],
-      ['Home / End', 'В начало / конец чарта'],
-      ['Ctrl+колесо', 'Зум поля'],
+      ['↑ / ↓', 'One row (grid of the block under the cursor)'],
+      ['PgUp / PgDn', 'One page'],
+      ['Home / End', 'Start / end of the chart'],
+      ['Ctrl+wheel', 'Field zoom'],
     ],
-    note: 'Во время воспроизведения навигация отключена.',
+    note: 'Navigation is disabled during playback.',
   },
   {
-    title: 'Выделение',
+    title: 'Selection',
     rows: [
-      ['Shift+клик / Shift+drag', 'Выделить строку / диапазон строк (повторный Shift+клик расширяет)'],
-      ['Ctrl+A', 'Выделить целиком блок под плейхедом'],
-      ['Shift+клик по рельсе', 'Выделить блок целиком'],
-      ['Esc', 'Снять выделение (обычный клик — тоже)'],
+      ['Shift+click / Shift+drag', 'Select a row / row range (another Shift+click extends it)'],
+      ['Ctrl+A', 'Select the whole block under the playhead'],
+      ['Shift+click on rail', 'Select the whole block'],
+      ['Esc', 'Clear selection (a plain click does too)'],
     ],
-    note: 'Выделение не пересекает границы блоков: у блоков разный Split, поэтому диапазон живёт внутри одного блока.',
+    note: 'Selection does not cross block boundaries: blocks have different Split, so a range lives within one block.',
   },
   {
-    title: 'Операции над выделением',
+    title: 'Selection operations',
     rows: [
-      ['Delete / Backspace', 'Удалить ноты в диапазоне; block-выделение — удалить блок'],
-      ['Ctrl+C / Ctrl+X / Ctrl+V', 'Копировать / вырезать / вставить (в начало выделения или от плейхеда)'],
-      ['Ctrl+Shift+V', 'Вставить со сдвигом колонок (+1 за нажатие, с заворотом)'],
-      ['X', 'Flip horizontal (зеркало по колонкам)'],
-      ['Y', 'Flip vertical (реверс строк)'],
-      ['M', 'Mirror (X + Y, поворот на 180°)'],
+      ['Delete / Backspace', 'Delete notes in the range; block selection — delete the block'],
+      ['Ctrl+C / Ctrl+X / Ctrl+V', 'Copy / cut / paste (at selection start, or at the playhead)'],
+      ['Ctrl+Shift+V', 'Paste with column shift (+1 per press, wraps around)'],
+      ['X', 'Flip horizontal (mirror columns)'],
+      ['Y', 'Flip vertical (reverse rows)'],
+      ['M', 'Mirror (X + Y, 180° rotation)'],
     ],
-    note: 'Частично попавший в диапазон холд при удалении убирается целиком, при копировании — обрезается. Трансформации не трогают кросс-блочные холды.',
+    note: 'A hold partially inside the range is deleted whole and trimmed when copied. Transforms do not touch cross-block holds.',
   },
   {
-    title: 'Ввод нот',
+    title: 'Note input',
     rows: [
-      ['Клик', 'Поставить tap (по существующей ноте — удалить)'],
-      ['Drag вниз', 'Растянуть hold (drag вверх — отмена)'],
-      ['Alt+drag', 'Серия тапов по строкам под мышью'],
+      ['Click', 'Place a tap (click an existing note to delete it)'],
+      ['Drag down', 'Stretch a hold (drag up to cancel)'],
+      ['Alt+drag', 'Series of taps along the rows under the mouse'],
     ],
   },
   {
-    title: 'Live-запись (во время воспроизведения)',
+    title: 'Live recording (during playback)',
     rows: [
-      ['Z Q S E C', 'Колонки ↙ ↖ ● ↗ ↘ (1P) — раскладка UCS Lite'],
-      ['Num1 Num7 Num5 Num9 Num3', 'Колонки ↙ ↖ ● ↗ ↘ (2P, double) — именно цифровой блок'],
-      ['1 2 3 4 5 6 7 8 9 0', 'Колонки 0–9 слева направо — раскладка StepMania'],
+      ['Z Q S E C', 'Columns ↙ ↖ ● ↗ ↘ (1P) — UCS Lite layout'],
+      ['Num1 Num7 Num5 Num9 Num3', 'Columns ↙ ↖ ● ↗ ↘ (2P, double) — numeric keypad only'],
+      ['1 2 3 4 5 6 7 8 9 0', 'Columns 0–9 left to right — StepMania layout'],
     ],
-    note: 'Раскладка выбирается в View → Live input keys. Tap кладётся на ближайшую строку к текущему моменту (квантование по Split). Медленный Rush повышает точность.',
+    note: 'Pick the layout in View → Live input keys. A tap lands on the row closest to the current moment (quantized to Split). Slower Rush improves accuracy.',
   },
 ]
 
@@ -142,7 +142,7 @@ export function ShortcutsModal({ onClose }: Props) {
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-border shrink-0">
-          <span className="font-medium text-sm text-foreground">Горячие клавиши</span>
+          <span className="font-medium text-sm text-foreground">Keyboard shortcuts</span>
           <button
             onClick={onClose}
             title="Close (Esc)"
@@ -151,7 +151,9 @@ export function ShortcutsModal({ onClose }: Props) {
             ✕
           </button>
         </div>
-        <div className="overflow-y-auto px-4 py-3 space-y-4">
+        {/* min-h-0: flex-ребёнок иначе не сжимается под max-h родителя и
+            overflow-y-auto никогда не включается — контент вылезал за модалку. */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-4">
           {SECTIONS.map(section => (
             <div key={section.title}>
               <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1.5">
@@ -173,9 +175,10 @@ export function ShortcutsModal({ onClose }: Props) {
             </div>
           ))}
           <p className="text-muted-foreground border-t border-border pt-2">
-            <Kbd>Ctrl</Kbd> везде означает «Ctrl или Cmd» (на macOS работают обе).
-            Ещё: метроном и хит-саунды — чекбоксы в тулбаре; resize блока — перетаскивание
-            его нижней границы за рельсу; статус-бар под сеткой показывает позицию под мышью.
+            <Kbd>Ctrl</Kbd> always means “Ctrl or Cmd” (both work on macOS).
+            Also: metronome and hit sounds are toolbar checkboxes; resize a block by
+            dragging its bottom edge on the rail; the status bar below the grid shows
+            the position under the mouse.
           </p>
         </div>
       </div>
