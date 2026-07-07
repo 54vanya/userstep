@@ -152,8 +152,9 @@ export function ShortcutsModal({ onClose }: Props) {
           </button>
         </div>
         {/* min-h-0: flex-ребёнок иначе не сжимается под max-h родителя и
-            overflow-y-auto никогда не включается — контент вылезал за модалку. */}
-        <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-4">
+            overflow-y-auto никогда не включается — контент вылезал за модалку.
+            modal-scroll — постоянно видимый скроллбар (index.css). */}
+        <div className="modal-scroll flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-4">
           {SECTIONS.map(section => (
             <div key={section.title}>
               <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1.5">
