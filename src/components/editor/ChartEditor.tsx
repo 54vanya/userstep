@@ -61,6 +61,25 @@ export function ChartEditor() {
   }, [activeTabId, activeTab?.playbackRate])
 
   useEffect(() => {
+    // Рисование холда с клавиатуры: пока клавиша-колонка зажата, ArrowDown/Up
+    // растягивает/укорачивает холд от строки постановки (только на паузе, в
+    // пределах блока). На время жеста undo-история ставится на паузу — весь
+    // жест сворачивается в один шаг отмены (снэпшот тапа при keydown).
+    let keyHold: {
+      code: string
+      col: number
+      tabId: string
+      blockIdx: number
+      anchorRow: number
+      endRow: number
+      paused: boolean
+    } | null = null
+
+    const endKeyHold = () => {
+      if (keyHold?.paused) useTabsStore.temporal.getState().resume()
+      keyHold = null
+    }
+
     const onKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement
       // Инвариант: НИ ОДНА настройка в тулбаре (слайдеры, чекбоксы, кнопки) не должна
@@ -80,25 +99,66 @@ export function ChartEditor() {
         return
       }
 
-      // Live-запись: во время playback клавиши-стрелки кладут tap на ближайшую
-      // к текущему моменту строку (квантование на линию сплита бесплатно — row
-      // дискретен). Существующая нота в ячейке замещается.
+      // Клавиатурный ввод нот — работает всегда, не только при playback.
+      // Во время playback (live-запись): tap на ближайшую к текущему моменту
+      // строку (квантование на линию сплита бесплатно — row дискретен),
+      // существующая нота замещается. На паузе: клавиша работает как клик по
+      // строке под курсором — пустая ячейка получает tap, занятая очищается.
       const liveKeys = LIVE_KEY_LAYOUTS[ed.liveKeyLayout]
-      if (ed.isPlaying && !inInput && !e.repeat && !e.altKey
+      if (!inInput && !e.repeat && !e.altKey
           && !e.ctrlKey && !e.metaKey && liveKeys[e.code] !== undefined) {
         const col = liveKeys[e.code]
         const st = activeTabState()
         if (!st || col >= st.cols) return
         e.preventDefault()
-        const pos = blockRowAtMs(st.tab.chart.blocks, audioEngine.getCurrentMs())
+        const ms = ed.isPlaying ? audioEngine.getCurrentMs() : ed.currentTime
+        const pos = blockRowAtMs(st.tab.chart.blocks, ms)
         if (!pos) return
-        const blocks = st.tab.chart.blocks.map((b, i) => {
-          if (i !== pos.blockIdx) return b
-          const filtered = clearColumnSpan(b.notes, col, pos.row, pos.row)
-          return { ...b, notes: [...filtered, { row: pos.row, col, type: 'tap' as const }] }
-        })
-        // Замещённая нота могла быть частью кросс-блочного холда — чистим
+        const block = st.tab.chart.blocks[pos.blockIdx]
+        const filtered = clearColumnSpan(block.notes, col, pos.row, pos.row)
+        // Тогл только на паузе: при live-записи повторный удар по строке
+        // должен оставлять ноту, а не стирать её.
+        const toggledOff = !ed.isPlaying && filtered.length !== block.notes.length
+        const notes = toggledOff ? filtered : [...filtered, { row: pos.row, col, type: 'tap' as const }]
+        const blocks = st.tab.chart.blocks.map((b, i) => (i === pos.blockIdx ? { ...b, notes } : b))
+        // Затронутая нота могла быть частью кросс-блочного холда — чистим
         // зависшие continues/continued у соседей.
+        useTabsStore.getState().updateChart(st.tab.id, { ...st.tab.chart, blocks: sanitizeHoldFlags(blocks) })
+        // Якорь для растягивания холда стрелками, пока клавиша зажата.
+        if (!ed.isPlaying && !toggledOff) {
+          keyHold = { code: e.code, col, tabId: st.tab.id, blockIdx: pos.blockIdx, anchorRow: pos.row, endRow: pos.row, paused: false }
+        }
+        return
+      }
+
+      // Зажатая клавиша-колонка + ArrowDown/Up — растягивание холда от якоря
+      // (ArrowUp укорачивает обратно; выше якоря не поднимается — остаётся tap).
+      // preventDefault не зовём: курсор двигает обработчик навигации ChartGrid.
+      if (keyHold && !ed.isPlaying && !inInput && !e.altKey && !e.ctrlKey && !e.metaKey
+          && (e.code === 'ArrowDown' || e.code === 'ArrowUp')) {
+        const st = activeTabState()
+        if (!st || st.tab.id !== keyHold.tabId) {
+          endKeyHold()
+          return
+        }
+        const block = st.tab.chart.blocks[keyHold.blockIdx]
+        const maxRow = blockRowCount(block) - 1
+        const dir = e.code === 'ArrowDown' ? 1 : -1
+        const next = Math.min(maxRow, Math.max(keyHold.anchorRow, keyHold.endRow + dir))
+        if (next === keyHold.endRow) return
+        const prevEnd = keyHold.endRow
+        keyHold.endRow = next
+        if (!keyHold.paused) {
+          useTabsStore.temporal.getState().pause()
+          keyHold.paused = true
+        }
+        const filtered = clearColumnSpan(block.notes, keyHold.col, keyHold.anchorRow, Math.max(prevEnd, next))
+        const note =
+          next === keyHold.anchorRow
+            ? { row: keyHold.anchorRow, col: keyHold.col, type: 'tap' as const }
+            : { row: keyHold.anchorRow, col: keyHold.col, type: 'hold' as const, endRow: next }
+        const bi = keyHold.blockIdx
+        const blocks = st.tab.chart.blocks.map((b, i) => (i === bi ? { ...b, notes: [...filtered, note] } : b))
         useTabsStore.getState().updateChart(st.tab.id, { ...st.tab.chart, blocks: sanitizeHoldFlags(blocks) })
         return
       }
@@ -238,8 +298,20 @@ export function ChartEditor() {
       }
     }
 
+    // Отпускание клавиши-колонки завершает жест холда; blur окна — страховка
+    // (keyup мог не долететь), иначе undo-история осталась бы на паузе.
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (keyHold && e.code === keyHold.code) endKeyHold()
+    }
     window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup', onKeyUp)
+    window.addEventListener('blur', endKeyHold)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('blur', endKeyHold)
+      endKeyHold()
+    }
   }, [])
 
   if (!activeTab) {

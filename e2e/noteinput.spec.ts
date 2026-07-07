@@ -55,6 +55,36 @@ test('Alt+drag рисует серию тапов', async ({ page }) => {
   expect(notes.every(n => n.col === 0 && n.type === 'tap')).toBe(true)
 })
 
+test('клавиша на паузе ставит и убирает ноту в строке под курсором', async ({ page }) => {
+  await openEmptyChart(page)
+  await page.keyboard.press('s') // курсор на старте → строка 0, колонка 2
+  let notes = await getNotes(page)
+  expect(notes).toHaveLength(1)
+  expect(notes[0]).toMatchObject({ row: 0, col: 2, type: 'tap' })
+
+  await page.keyboard.press('s') // повторное нажатие — тогл, ячейка очищается
+  notes = await getNotes(page)
+  expect(notes).toHaveLength(0)
+})
+
+test('зажатая клавиша + стрелки рисуют холд от якоря', async ({ page }) => {
+  await openEmptyChart(page)
+  await page.keyboard.down('s')
+  await page.keyboard.press('ArrowDown')
+  await page.keyboard.press('ArrowDown')
+  await page.keyboard.press('ArrowDown')
+  await page.keyboard.press('ArrowUp') // укоротили обратно
+  await page.keyboard.up('s')
+
+  const notes = await getNotes(page)
+  expect(notes).toHaveLength(1)
+  expect(notes[0]).toMatchObject({ row: 0, col: 2, type: 'hold', endRow: 2 })
+
+  // Весь жест — один шаг undo (история на паузе во время растягивания).
+  await page.keyboard.press('Control+z')
+  expect(await getNotes(page)).toHaveLength(0)
+})
+
 test('live-запись: клавиша S во время playback кладёт tap в колонку 2', async ({ page }) => {
   await openEmptyChart(page)
 
