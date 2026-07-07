@@ -47,6 +47,11 @@ export interface ViewSettings {
   activeSkin: string
   showFps: boolean
   playbackMode: PlaybackMode
+  // Кап рендера playback на 60 FPS: на high-refresh дисплеях (ProMotion 120Гц)
+  // RAF рисует 120 кадров/с, и при записи видео 60 fps захват попадает то на
+  // «чётный», то на «нечётный» кадр — видны биения. С капом рисуем каждый
+  // второй кадр, движение в 60fps-записи ровное.
+  playbackFpsCap: boolean
   fieldZoom: number
   showNoteCounter: boolean
   railColoring: RailColoring
@@ -63,6 +68,7 @@ const DEFAULTS: ViewSettings = {
   activeSkin: 'basic',
   showFps: false,
   playbackMode: 'snap',
+  playbackFpsCap: false,
   fieldZoom: 100,
   showNoteCounter: false,
   railColoring: 'none',
@@ -98,6 +104,8 @@ export function loadViewSettings(): ViewSettings {
       playbackMode: PLAYBACK_MODES.includes(parsed.playbackMode as PlaybackMode)
         ? (parsed.playbackMode as PlaybackMode)
         : DEFAULTS.playbackMode,
+      playbackFpsCap:
+        typeof parsed.playbackFpsCap === 'boolean' ? parsed.playbackFpsCap : DEFAULTS.playbackFpsCap,
       fieldZoom: clampFieldZoom(parsed.fieldZoom),
       showNoteCounter: typeof parsed.showNoteCounter === 'boolean' ? parsed.showNoteCounter : DEFAULTS.showNoteCounter,
       railColoring: RAIL_COLORINGS.includes(parsed.railColoring as RailColoring)

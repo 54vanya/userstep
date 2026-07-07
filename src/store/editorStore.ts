@@ -19,6 +19,7 @@ interface EditorStore {
   activeSkin: string
   showFps: boolean
   playbackMode: PlaybackMode
+  playbackFpsCap: boolean
   fieldZoom: number
   showNoteCounter: boolean
   railColoring: RailColoring
@@ -37,6 +38,7 @@ interface EditorStore {
   setActiveSkin: (skin: string) => void
   setShowFps: (show: boolean) => void
   setPlaybackMode: (mode: PlaybackMode) => void
+  setPlaybackFpsCap: (on: boolean) => void
   setFieldZoom: (zoom: number) => void
   setShowNoteCounter: (show: boolean) => void
   setRailColoring: (mode: RailColoring) => void
@@ -59,6 +61,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   activeSkin: _view.activeSkin,
   showFps: _view.showFps,
   playbackMode: _view.playbackMode,
+  playbackFpsCap: _view.playbackFpsCap,
   fieldZoom: _view.fieldZoom,
   showNoteCounter: _view.showNoteCounter,
   railColoring: _view.railColoring,
@@ -77,6 +80,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   setActiveSkin: (activeSkin) => { set({ activeSkin }); persistView(get) },
   setShowFps: (showFps) => { set({ showFps }); persistView(get) },
   setPlaybackMode: (playbackMode) => { set({ playbackMode }); persistView(get) },
+  setPlaybackFpsCap: (playbackFpsCap) => { set({ playbackFpsCap }); persistView(get) },
   setFieldZoom: (zoom) => { set({ fieldZoom: clampFieldZoom(zoom) }); persistView(get) },
   setShowNoteCounter: (showNoteCounter) => { set({ showNoteCounter }); persistView(get) },
   setRailColoring: (railColoring) => { set({ railColoring }); persistView(get) },
@@ -89,6 +93,6 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 }))
 
 function persistView(get: () => EditorStore): void {
-  const { showColumnDividers, showRowLines, activeSkin, showFps, playbackMode, fieldZoom, showNoteCounter, railColoring, liveKeyLayout, rhythmColoring, hitSounds, metronome, musicVolume } = get()
-  saveViewSettings({ showColumnDividers, showRowLines, activeSkin, showFps, playbackMode, fieldZoom, showNoteCounter, railColoring, liveKeyLayout, rhythmColoring, hitSounds, metronome, musicVolume })
+  const { showColumnDividers, showRowLines, activeSkin, showFps, playbackMode, playbackFpsCap, fieldZoom, showNoteCounter, railColoring, liveKeyLayout, rhythmColoring, hitSounds, metronome, musicVolume } = get()
+  saveViewSettings({ showColumnDividers, showRowLines, activeSkin, showFps, playbackMode, playbackFpsCap, fieldZoom, showNoteCounter, railColoring, liveKeyLayout, rhythmColoring, hitSounds, metronome, musicVolume })
 }

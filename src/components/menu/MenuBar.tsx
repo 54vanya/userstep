@@ -107,6 +107,7 @@ export function MenuBar() {
     railColoring, setRailColoring,
     liveKeyLayout, setLiveKeyLayout,
     playbackMode, setPlaybackMode,
+    playbackFpsCap, setPlaybackFpsCap,
     theme, setTheme,
   } = useEditorStore()
 
@@ -163,6 +164,7 @@ export function MenuBar() {
         <Radio on={playbackMode === 'smooth'} onSelect={() => setPlaybackMode('smooth')}>Smooth</Radio>
         <Radio on={playbackMode === 'framelock'} onSelect={() => setPlaybackMode('framelock')}>Frame-lock</Radio>
         <Radio on={playbackMode === 'raw'} onSelect={() => setPlaybackMode('raw')}>Raw audio</Radio>
+        <Toggle on={playbackFpsCap} onToggle={() => setPlaybackFpsCap(!playbackFpsCap)}>Limit to 60 FPS (video capture)</Toggle>
         <Separator />
         <SectionLabel>Theme</SectionLabel>
         <Radio on={theme === 'system'} onSelect={() => setTheme('system')}>System</Radio>

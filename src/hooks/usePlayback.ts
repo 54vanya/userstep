@@ -22,7 +22,7 @@ export function usePlayback(
   scrollRef: React.RefObject<HTMLDivElement | null>,
   { contentRef, gridRef, playbackYRef }: PlaybackOptions,
 ) {
-  const { isPlaying, setPlaying, setCurrentTime, playbackMode } = useEditorStore()
+  const { isPlaying, setPlaying, setCurrentTime, playbackMode, playbackFpsCap } = useEditorStore()
   const rafRef = useRef<number>(0)
 
   useEffect(() => {
@@ -76,7 +76,20 @@ export function usePlayback(
       return s[s.length >> 1]
     }
 
+    // Кап 60 FPS: на high-refresh дисплеях (ProMotion 120Гц) рендерим каждый
+    // второй кадр — 60fps-захват видео попадает на равномерные позиции, без
+    // биений 120Гц-рендера с 60Гц-записью. Позиция по-прежнему линейна от
+    // таймстампа отрисованного кадра, так что движение остаётся ровным.
+    // Допуск ~1мс — чтобы джиттер таймстампов не заставлял ждать лишний кадр.
+    const FPS_CAP_MS = 1000 / 60
+    let lastRenderT = -Infinity
+
     const tick = (now: number) => {
+      if (playbackFpsCap && now - lastRenderT < FPS_CAP_MS - 1) {
+        rafRef.current = requestAnimationFrame(tick)
+        return
+      }
+      lastRenderT = now
       const rate = audioEngine.getPlaybackRate()
       const audioMs = audioEngine.getCurrentMs()
       const dt = Math.max(0, now - lastT)
@@ -145,5 +158,5 @@ export function usePlayback(
       // Передаём позицию нативному скроллу: его onScroll пересинхронит currentTime.
       scroller.scrollTop = y
     }
-  }, [isPlaying, playbackMode, blocks, blockLayouts, scrollRef, contentRef, gridRef, playbackYRef])
+  }, [isPlaying, playbackMode, playbackFpsCap, blocks, blockLayouts, scrollRef, contentRef, gridRef, playbackYRef])
 }
