@@ -24,7 +24,7 @@ test('total time updates when a block is added', async ({ page }) => {
   const before = await display.textContent()
 
   // Add a block via the rail
-  const scroller = page.locator('.overflow-y-auto').first()
+  const scroller = page.locator('.overflow-x-auto.bg-grid').first()
   await scroller.evaluate(el => el.scrollTop = el.scrollHeight)
   await page.click('button[title="Add block"]')
   await page.waitForTimeout(300)
@@ -88,7 +88,7 @@ test('clicking same block again closes popup', async ({ page }) => {
 test('only one popup visible at a time', async ({ page }) => {
   await openEmptyChart(page)
   // Add a second block
-  const scroller = page.locator('.overflow-y-auto').first()
+  const scroller = page.locator('.overflow-x-auto.bg-grid').first()
   await scroller.evaluate(el => el.scrollTop = el.scrollHeight)
   await page.click('button[title="Add block"]')
   await page.waitForTimeout(300)
@@ -123,7 +123,7 @@ test('popup top is not above the editor area', async ({ page }) => {
   await openEmptyChart(page)
 
   // The scroll container is the editor area
-  const editorBox = await page.locator('.overflow-y-auto').first().boundingBox()
+  const editorBox = await page.locator('.overflow-x-auto.bg-grid').first().boundingBox()
   expect(editorBox).not.toBeNull()
 
   await page.getByTestId('block-rail').getByText('#1').click()
@@ -139,7 +139,7 @@ test('popup top is not above the editor area', async ({ page }) => {
 test('popup bottom does not exceed editor bottom', async ({ page }) => {
   await openEmptyChart(page)
 
-  const editorBox = await page.locator('.overflow-y-auto').first().boundingBox()
+  const editorBox = await page.locator('.overflow-x-auto.bg-grid').first().boundingBox()
   expect(editorBox).not.toBeNull()
   const editorBottom = editorBox!.y + editorBox!.height
 
@@ -203,7 +203,7 @@ test('Insert After creates a block with 1 measure and same BPM/beat/split', asyn
 test('Delete button has trash icon and removes block', async ({ page }) => {
   await openEmptyChart(page)
   // Add second block so delete becomes available
-  const scroller = page.locator('.overflow-y-auto').first()
+  const scroller = page.locator('.overflow-x-auto.bg-grid').first()
   await scroller.evaluate(el => el.scrollTop = el.scrollHeight)
   await page.click('button[title="Add block"]')
   await page.waitForTimeout(300)
@@ -229,7 +229,7 @@ test('Delete button is hidden when only one block exists', async ({ page }) => {
 
 test('+ button at bottom of rail appends a new block', async ({ page }) => {
   await openEmptyChart(page)
-  const scroller = page.locator('.overflow-y-auto').first()
+  const scroller = page.locator('.overflow-x-auto.bg-grid').first()
   await scroller.evaluate(el => el.scrollTop = el.scrollHeight)
   await page.waitForTimeout(200)
   await page.click('button[title="Add block"]')

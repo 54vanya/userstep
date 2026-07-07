@@ -4,10 +4,10 @@ import { Sidebar } from '@/components/sidebar/Sidebar'
 import { ChartEditor } from '@/components/editor/ChartEditor'
 import { FpsMeter } from '@/components/FpsMeter'
 import { MenuBar } from '@/components/menu/MenuBar'
+import { useEffect } from 'react'
 import { useTabsStore } from '@/store/tabsStore'
 import { useEditorStore } from '@/store/editorStore'
-import { audioEngine } from '@/services/audioEngine'
-import { parseUcs } from '@/services/ucsParser'
+import { importUcsViaDialog, openPiuViaDialog, openDroppedFile } from '@/services/fileActions'
 import { usePwaUpdate } from '@/hooks/usePwaUpdate'
 
 export function App() {
@@ -16,6 +16,22 @@ export function App() {
   const showSidebar = !!activeTab && !activeTab.isBlank
   const { needRefresh, update } = usePwaUpdate()
   const showFps = useEditorStore(s => s.showFps)
+
+  // Drag&drop файлов в окно: .ucs/.piu.json открываются новой вкладкой,
+  // аудио грузится в активную.
+  useEffect(() => {
+    const onDragOver = (e: DragEvent) => e.preventDefault()
+    const onDrop = (e: DragEvent) => {
+      e.preventDefault()
+      for (const file of e.dataTransfer?.files ?? []) openDroppedFile(file)
+    }
+    window.addEventListener('dragover', onDragOver)
+    window.addEventListener('drop', onDrop)
+    return () => {
+      window.removeEventListener('dragover', onDragOver)
+      window.removeEventListener('drop', onDrop)
+    }
+  }, [])
 
   return (
     <div className="flex flex-col h-full">
@@ -51,59 +67,7 @@ export function App() {
 }
 
 function WelcomeScreen() {
-  const { addTab, setTabScale, setTabPlaybackRate } = useTabsStore()
-  const { setCurrentTime } = useEditorStore()
-
-  const handleImportUcs = () => {
-    const input = document.createElement('input')
-    input.type = 'file'
-    input.accept = '.ucs'
-    input.onchange = () => {
-      const file = input.files?.[0]
-      if (!file) return
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        try {
-          const chart = parseUcs(e.target?.result as string)
-          chart.meta.title = file.name.replace(/\.ucs$/i, '')
-          addTab(chart, chart.meta.title)
-        } catch {
-          alert('Failed to parse UCS file')
-        }
-      }
-      reader.readAsText(file)
-    }
-    input.click()
-  }
-
-  const handleLoadPiu = () => {
-    const input = document.createElement('input')
-    input.type = 'file'
-    input.accept = '.json,.piu.json'
-    input.onchange = () => {
-      const file = input.files?.[0]
-      if (!file) return
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        try {
-          const chart = JSON.parse(e.target?.result as string)
-          const label = chart.meta?.title || file.name.replace(/\.piu\.json$|\.json$/, '')
-          const tabId = addTab(chart, label)
-          const s = chart.editorSettings
-          if (s) {
-            setTabScale(tabId, s.scale)
-            setTabPlaybackRate(tabId, s.playbackRate)
-            audioEngine.setPlaybackRate(s.playbackRate)
-            setCurrentTime(s.currentTime)
-          }
-        } catch {
-          alert('Failed to parse .piu.json file')
-        }
-      }
-      reader.readAsText(file)
-    }
-    input.click()
-  }
+  const { addTab } = useTabsStore()
 
   return (
     <div className="flex-1 flex items-center justify-center">
@@ -118,13 +82,13 @@ function WelcomeScreen() {
             New Chart
           </button>
           <button
-            onClick={handleImportUcs}
+            onClick={importUcsViaDialog}
             className="px-4 py-2 rounded bg-secondary text-secondary-foreground text-sm hover:bg-accent transition-colors"
           >
             Import .ucs
           </button>
           <button
-            onClick={handleLoadPiu}
+            onClick={openPiuViaDialog}
             className="px-4 py-2 rounded bg-secondary text-secondary-foreground text-sm hover:bg-accent transition-colors"
           >
             Open .piu.json

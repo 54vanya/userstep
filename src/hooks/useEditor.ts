@@ -1,7 +1,9 @@
 import { useRef, useState, useCallback } from 'react'
 import { useTabsStore } from '@/store/tabsStore'
+import { useEditorStore } from '@/store/editorStore'
 import { blockRowCount, hitLine, snapRow } from '@/utils/geometry'
 import type { BlockLayout } from '@/utils/geometry'
+import { collectHoldChain, sanitizeHoldFlags } from '@/utils/holds'
 import type { Note, Block } from '@/types/chart'
 
 export interface HoldPreview {
@@ -12,6 +14,14 @@ export interface HoldPreview {
   endRow: number
 }
 
+// Alt+drag — «рисование» серии тапов (StepEdit Lite): tap на каждой строке,
+// через которую прошла мышь. rowsByBlock мутируется по ходу drag'а.
+export interface TapSeries {
+  col: number
+  rowsByBlock: Map<string, Set<number>>
+  last: { blockId: string; row: number }
+}
+
 interface DragState {
   blockId: string
   col: number
@@ -20,36 +30,6 @@ interface DragState {
   endRow: number
   startedOnNote: boolean
   draggedUp: boolean
-}
-
-// Collect all block-parts of a cross-block hold chain containing (blocks[anyIdx], col)
-function collectHoldChain(blocks: Block[], anyIdx: number, col: number): { idx: number; note: Note }[] {
-  const anyNote = blocks[anyIdx]?.notes.find(n => n.col === col && n.type === 'hold')
-  if (!anyNote) return []
-
-  // Walk backward to find the true chain start
-  let startIdx = anyIdx
-  if (anyNote.continued) {
-    for (let i = anyIdx - 1; i >= 0; i--) {
-      const n = blocks[i].notes.find(n => n.col === col && n.type === 'hold' && n.continues)
-      if (!n) break
-      startIdx = i
-      if (!n.continued) break
-    }
-  }
-
-  // Walk forward collecting each part
-  const chain: { idx: number; note: Note }[] = []
-  for (let i = startIdx; i < blocks.length; i++) {
-    const n = blocks[i].notes.find(n => {
-      if (n.col !== col || n.type !== 'hold') return false
-      return i === startIdx ? !n.continued : !!n.continued
-    })
-    if (!n) break
-    chain.push({ idx: i, note: n })
-    if (!n.continues) break
-  }
-  return chain
 }
 
 function isNoteOccupied(block: Block, row: number, col: number): boolean {
@@ -78,6 +58,21 @@ export function useEditor(
 
   const dragRef = useRef<DragState | null>(null)
   const [preview, setPreview] = useState<HoldPreview | null>(null)
+  // Якорь Shift+drag выделения: строка, от которой тянется диапазон (в пределах
+  // одного блока — выделение у нас per-block, как per-range у StepEdit Lite).
+  const selAnchorRef = useRef<{ blockId: string; row: number } | null>(null)
+  // Alt+drag серия тапов: копится в ref, в стейт кладётся снимок для предпросмотра,
+  // коммит одним updateChart на pointerup (один undo-снэпшот).
+  const tapSeriesRef = useRef<TapSeries | null>(null)
+  const [tapPreview, setTapPreview] = useState<{ col: number; rowsByBlock: Map<string, number[]> } | null>(null)
+
+  const snapshotTapPreview = useCallback(() => {
+    const s = tapSeriesRef.current
+    if (!s) return
+    const rowsByBlock = new Map<string, number[]>()
+    s.rowsByBlock.forEach((set, id) => rowsByBlock.set(id, [...set]))
+    setTapPreview({ col: s.col, rowsByBlock })
+  }, [])
 
   const hitTest = useCallback((clientX: number, clientY: number) => {
     const el = scrollRef.current
@@ -96,8 +91,70 @@ export function useEditor(
     return { layout: hit.layout, row: hit.row, col }
   }, [blockLayouts, scrollRef, cols, cw, cursorY, scrollOffset])
 
+  // Y в координатах чарта (та же формула, что в hitTest, но без привязки к колонке).
+  const chartY = useCallback((clientY: number) => {
+    const el = scrollRef.current
+    if (!el) return null
+    return clientY - el.getBoundingClientRect().top + scrollOffset() - cursorY
+  }, [scrollRef, scrollOffset, cursorY])
+
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     if (e.button !== 0) return
+
+    // Shift+клик / Shift+drag — выделение диапазона строк (снэп на ближайшую
+    // линию без мёртвых зон). Повторный Shift+клик в том же блоке расширяет
+    // существующий диапазон до кликнутой строки.
+    if (e.shiftKey) {
+      const py = chartY(e.clientY)
+      if (py === null) return
+      const snap = snapRow(py, blockLayouts)
+      if (!snap) return
+      const { selection, setSelection } = useEditorStore.getState()
+      const blockId = snap.layout.block.id
+      if (selection?.kind === 'rows' && selection.blockId === blockId) {
+        setSelection({
+          kind: 'rows',
+          blockId,
+          fromRow: Math.min(selection.fromRow, snap.row),
+          toRow: Math.max(selection.toRow, snap.row),
+        })
+      } else {
+        setSelection({ kind: 'rows', blockId, fromRow: snap.row, toRow: snap.row })
+      }
+      selAnchorRef.current = { blockId, row: snap.row }
+      ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+      e.preventDefault()
+      return
+    }
+
+    // Alt+клик / Alt+drag — серия тапов (StepEdit Lite): tap на каждой строке,
+    // через которую прошла мышь; колонка фиксируется стартовой.
+    if (e.altKey) {
+      const el = scrollRef.current
+      if (!el) return
+      const px = e.clientX - el.getBoundingClientRect().left
+      const col = Math.floor(px / cw)
+      if (col < 0 || col >= cols) return
+      const py = chartY(e.clientY)
+      if (py === null) return
+      const snap = snapRow(py, blockLayouts)
+      if (!snap) return
+      const blockId = snap.layout.block.id
+      tapSeriesRef.current = {
+        col,
+        rowsByBlock: new Map([[blockId, new Set([snap.row])]]),
+        last: { blockId, row: snap.row },
+      }
+      snapshotTapPreview()
+      ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+      e.preventDefault()
+      return
+    }
+
+    // Обычный клик снимает выделение (как в StepEdit Lite; Esc — тоже).
+    const ed = useEditorStore.getState()
+    if (ed.selection) ed.setSelection(null)
+
     const hit = hitTest(e.clientX, e.clientY)
     if (!hit) return
 
@@ -114,9 +171,51 @@ export function useEditor(
     }
     ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
     e.preventDefault()
-  }, [hitTest])
+  }, [hitTest, chartY, blockLayouts, scrollRef, cols, cw, snapshotTapPreview])
 
   const onPointerMove = useCallback((e: React.PointerEvent) => {
+    // Серия тапов: добавляем каждую строку между прошлой и текущей позицией
+    // (быстрая мышь перескакивает строки — интерполируем внутри блока).
+    const series = tapSeriesRef.current
+    if (series) {
+      const py = chartY(e.clientY)
+      if (py === null) return
+      const snap = snapRow(py, blockLayouts)
+      if (!snap) return
+      const blockId = snap.layout.block.id
+      if (!series.rowsByBlock.has(blockId)) series.rowsByBlock.set(blockId, new Set())
+      const set = series.rowsByBlock.get(blockId)!
+      if (series.last.blockId === blockId) {
+        const from = Math.min(series.last.row, snap.row)
+        const to = Math.max(series.last.row, snap.row)
+        for (let r = from; r <= to; r++) set.add(r)
+      } else {
+        set.add(snap.row)
+      }
+      series.last = { blockId, row: snap.row }
+      snapshotTapPreview()
+      return
+    }
+
+    // Растягивание выделения: диапазон между якорем и текущей строкой, зажатый
+    // в блок якоря (кросс-блочного выделения нет — у блоков разные split).
+    const anchor = selAnchorRef.current
+    if (anchor) {
+      const py = chartY(e.clientY)
+      if (py === null) return
+      const layout = blockLayouts.find(l => l.block.id === anchor.blockId)
+      if (!layout) return
+      const rel = Math.round((py - layout.startY) / layout.rh)
+      const row = Math.min(layout.totalRows - 1, Math.max(0, rel))
+      useEditorStore.getState().setSelection({
+        kind: 'rows',
+        blockId: anchor.blockId,
+        fromRow: Math.min(anchor.row, row),
+        toRow: Math.max(anchor.row, row),
+      })
+      return
+    }
+
     const drag = dragRef.current
     if (!drag || drag.startedOnNote) return
 
@@ -157,7 +256,29 @@ export function useEditor(
     } else {
       setPreview(null)
     }
-  }, [blockLayouts, scrollRef, scrollOffset, cursorY])
+  }, [blockLayouts, scrollRef, scrollOffset, cursorY, chartY, snapshotTapPreview])
+
+  // Коммит серии тапов одним updateChart: существующие ноты в закрашенных
+  // ячейках колонки замещаются, задетые холды удаляются (их части в этом блоке).
+  const commitTapSeries = useCallback(() => {
+    const s = tapSeriesRef.current
+    tapSeriesRef.current = null
+    setTapPreview(null)
+    if (!s || !activeTab || !activeTabId) return
+    const blocks = activeTab.chart.blocks.map(b => {
+      const set = s.rowsByBlock.get(b.id)
+      if (!set || set.size === 0) return b
+      const filtered = b.notes.filter(n => {
+        if (n.col !== s.col) return true
+        const end = n.type === 'hold' ? (n.endRow ?? n.row) : n.row
+        for (let r = n.row; r <= end; r++) if (set.has(r)) return false
+        return true
+      })
+      const taps: Note[] = [...set].sort((a, b2) => a - b2).map(row => ({ row, col: s.col, type: 'tap' }))
+      return { ...b, notes: [...filtered, ...taps] }
+    })
+    updateChart(activeTabId, { ...activeTab.chart, blocks: sanitizeHoldFlags(blocks) })
+  }, [activeTab, activeTabId, updateChart])
 
   const commit = useCallback(() => {
     const drag = dragRef.current
@@ -260,13 +381,24 @@ export function useEditor(
   }, [activeTab, activeTabId, updateChart, blockLayouts])
 
   const onPointerUp = useCallback((_e: React.PointerEvent) => {
+    if (tapSeriesRef.current) {
+      commitTapSeries()
+      return
+    }
+    if (selAnchorRef.current) {
+      selAnchorRef.current = null
+      return
+    }
     commit()
-  }, [commit])
+  }, [commit, commitTapSeries])
 
   const onPointerCancel = useCallback(() => {
+    selAnchorRef.current = null
+    tapSeriesRef.current = null
+    setTapPreview(null)
     dragRef.current = null
     setPreview(null)
   }, [])
 
-  return { onPointerDown, onPointerMove, onPointerUp, onPointerCancel, preview }
+  return { onPointerDown, onPointerMove, onPointerUp, onPointerCancel, preview, tapPreview }
 }

@@ -1,6 +1,15 @@
 import { v4 as uuidv4 } from 'uuid'
 import { useTabsStore } from '@/store/tabsStore'
+import {
+  splitBlockAt as splitBlockAtOp,
+  mergeWithNext as mergeWithNextOp,
+  deleteBelow as deleteBelowOp,
+} from '@/utils/blockOps'
 import type { Note, Block } from '@/types/chart'
+
+function noteEnd(n: Note): number {
+  return n.type === 'hold' ? (n.endRow ?? n.row) : n.row
+}
 
 export function useChart() {
   const { tabs, activeTabId, updateChart } = useTabsStore()
@@ -84,11 +93,45 @@ export function useChart() {
     updateChart(activeTabId, { ...chart, blocks: chart.blocks.filter(b => b.id !== blockId) })
   }
 
+  // Обёртки над чистыми операциями из utils/blockOps.ts.
+  const splitBlockAt = (blockId: string, row: number) => {
+    if (!chart || !activeTabId) return
+    const next = splitBlockAtOp(chart, blockId, row)
+    if (next) updateChart(activeTabId, next)
+  }
+
+  const mergeWithNext = (blockId: string) => {
+    if (!chart || !activeTabId) return
+    const next = mergeWithNextOp(chart, blockId)
+    if (next) updateChart(activeTabId, next)
+  }
+
+  const deleteBelow = (blockId: string, row: number) => {
+    if (!chart || !activeTabId) return
+    const next = deleteBelowOp(chart, blockId, row)
+    if (next) updateChart(activeTabId, next)
+  }
+
   const updateBlock = (blockId: string, patch: Partial<Block>) => {
     if (!chart || !activeTabId) return
     const blocks = chart.blocks.map(b => {
       if (b.id !== blockId) return b
       const merged = { ...b, ...patch }
+      // Adjust BeatSplit (как в StepEdit Lite): при смене split ноты остаются на
+      // своих долях — строки пересчитываются пропорционально. Столкнувшиеся после
+      // округления вниз (грубый split) ноты схлопываются в одну.
+      if (patch.split !== undefined && patch.split !== b.split && b.split > 0) {
+        const f = patch.split / b.split
+        const rescaled: Note[] = []
+        for (const n of b.notes) {
+          const nn: Note = { ...n, row: Math.round(n.row * f) }
+          if (nn.type === 'hold') nn.endRow = Math.max(nn.row, Math.round(noteEnd(n) * f))
+          const collides = rescaled.some(k =>
+            k.col === nn.col && noteEnd(k) >= nn.row && k.row <= noteEnd(nn))
+          if (!collides) rescaled.push(nn)
+        }
+        merged.notes = rescaled
+      }
       const cells = Math.max(1, merged.beat * merged.split)
       // rowCount — авторитетное целое число строк. Если задан явно (правка «Rows»),
       // берём его и пересчитываем measures под него. Иначе считаем из beat*split*measures
@@ -111,5 +154,5 @@ export function useChart() {
     updateChart(activeTabId, { ...chart, blocks })
   }
 
-  return { chart, addNote, removeNote, addBlock, insertBlockAfter, duplicateBlock, deleteBlock, updateBlock }
+  return { chart, addNote, removeNote, addBlock, insertBlockAfter, duplicateBlock, deleteBlock, updateBlock, splitBlockAt, mergeWithNext, deleteBelow }
 }

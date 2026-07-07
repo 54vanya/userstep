@@ -3,18 +3,10 @@ import { audioEngine } from '@/services/audioEngine'
 import { useTabsStore } from '@/store/tabsStore'
 import { useEditorStore } from '@/store/editorStore'
 import { useAudio } from '@/hooks/useAudio'
-import { computeBlockOffsets } from '@/utils/timing'
+import { computeBlockOffsets, formatMs } from '@/utils/timing'
 import { blockRowCount } from '@/utils/geometry'
 import { computeHitTimes, countPassed } from '@/utils/noteCount'
 import { FIELD_ZOOM_MIN, FIELD_ZOOM_MAX, FIELD_ZOOM_STEP } from '@/utils/viewSettings'
-
-function formatMs(ms: number): string {
-  const total = Math.max(0, Math.round(ms))
-  const m = Math.floor(total / 60000)
-  const s = Math.floor((total % 60000) / 1000)
-  const milli = total % 1000
-  return `${m}:${String(s).padStart(2, '0')}.${String(milli).padStart(3, '0')}`
-}
 
 interface TimeDisplayProps {
   totalMs: number
@@ -97,7 +89,7 @@ function NoteCountDisplay({ hitTimes }: { hitTimes: number[] }) {
 
 export function Toolbar() {
   const { tabs, activeTabId, setTabScale, setTabPlaybackRate } = useTabsStore()
-  const { isPlaying, currentTime, setPlaying, setCurrentTime, fieldZoom, setFieldZoom, rhythmColoring, setRhythmColoring, hitSounds, setHitSounds, musicVolume, setMusicVolume } = useEditorStore()
+  const { isPlaying, currentTime, setPlaying, setCurrentTime, fieldZoom, setFieldZoom, rhythmColoring, setRhythmColoring, hitSounds, setHitSounds, metronome, setMetronome, musicVolume, setMusicVolume } = useEditorStore()
   const activeTab = tabs.find(t => t.id === activeTabId)
 
   const totalMs = useMemo(() => {
@@ -209,8 +201,8 @@ export function Toolbar() {
         <span className="text-muted-foreground text-xs">Rush</span>
         <input
           type="range"
-          min={0.5}
-          max={1.5}
+          min={0.2}
+          max={4}
           step={0.1}
           value={playbackRate}
           onChange={e => {
@@ -221,7 +213,7 @@ export function Toolbar() {
           onMouseUp={e => e.currentTarget.blur()}
           className="w-20 accent-primary"
         />
-        <span className="text-xs text-muted-foreground w-6">×{playbackRate.toFixed(1)}</span>
+        <span className="text-xs text-muted-foreground w-7">×{playbackRate.toFixed(1)}</span>
         <button
           onClick={() => {
             if (activeTabId) setTabPlaybackRate(activeTabId, 1.0)
@@ -278,6 +270,19 @@ export function Toolbar() {
           className="accent-primary"
         />
         Hit sounds
+      </label>
+
+      <label
+        className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none whitespace-nowrap"
+        title="Tick on every beat during playback (accented on measure start)"
+      >
+        <input
+          type="checkbox"
+          checked={metronome}
+          onChange={e => setMetronome(e.target.checked)}
+          className="accent-primary"
+        />
+        Metronome
       </label>
 
       {activeTab && (

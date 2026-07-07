@@ -2,9 +2,18 @@ import { create } from 'zustand'
 import { loadTheme, applyTheme, type Theme } from '@/utils/theme'
 import { loadViewSettings, saveViewSettings, clampFieldZoom, type PlaybackMode, type RailColoring } from '@/utils/viewSettings'
 
+// Выделение (модель StepEdit Lite, два уровня):
+// rows  — диапазон строк ОДНОГО блока, все колонки; операции фазы 3 (delete/copy/
+//         flip) работают по нему;
+// block — блок целиком (Shift+клик по рельсе), Delete удаляет сам блок.
+export type Selection =
+  | { kind: 'rows'; blockId: string; fromRow: number; toRow: number }
+  | { kind: 'block'; blockId: string }
+
 interface EditorStore {
   isPlaying: boolean
   currentTime: number
+  selection: Selection | null
   showColumnDividers: boolean
   showRowLines: boolean
   activeSkin: string
@@ -15,11 +24,13 @@ interface EditorStore {
   railColoring: RailColoring
   rhythmColoring: boolean
   hitSounds: boolean
+  metronome: boolean
   musicVolume: number
   theme: Theme
 
   setPlaying: (playing: boolean) => void
   setCurrentTime: (ms: number) => void
+  setSelection: (sel: Selection | null) => void
   setShowColumnDividers: (show: boolean) => void
   setShowRowLines: (show: boolean) => void
   setActiveSkin: (skin: string) => void
@@ -30,6 +41,7 @@ interface EditorStore {
   setRailColoring: (mode: RailColoring) => void
   setRhythmColoring: (on: boolean) => void
   setHitSounds: (on: boolean) => void
+  setMetronome: (on: boolean) => void
   setMusicVolume: (v: number) => void
   setTheme: (theme: Theme) => void
 }
@@ -39,6 +51,7 @@ const _view = loadViewSettings()
 export const useEditorStore = create<EditorStore>((set, get) => ({
   isPlaying: false,
   currentTime: 0,
+  selection: null,
   showColumnDividers: _view.showColumnDividers,
   showRowLines: _view.showRowLines,
   activeSkin: _view.activeSkin,
@@ -49,11 +62,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   railColoring: _view.railColoring,
   rhythmColoring: _view.rhythmColoring,
   hitSounds: _view.hitSounds,
+  metronome: _view.metronome,
   musicVolume: _view.musicVolume,
   theme: loadTheme(),
 
   setPlaying: (isPlaying) => set({ isPlaying }),
   setCurrentTime: (currentTime) => set({ currentTime }),
+  setSelection: (selection) => set({ selection }),
   setShowColumnDividers: (showColumnDividers) => { set({ showColumnDividers }); persistView(get) },
   setShowRowLines: (showRowLines) => { set({ showRowLines }); persistView(get) },
   setActiveSkin: (activeSkin) => { set({ activeSkin }); persistView(get) },
@@ -64,11 +79,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   setRailColoring: (railColoring) => { set({ railColoring }); persistView(get) },
   setRhythmColoring: (rhythmColoring) => { set({ rhythmColoring }); persistView(get) },
   setHitSounds: (hitSounds) => { set({ hitSounds }); persistView(get) },
+  setMetronome: (metronome) => { set({ metronome }); persistView(get) },
   setMusicVolume: (musicVolume) => { set({ musicVolume }); persistView(get) },
   setTheme: (theme) => { applyTheme(theme); set({ theme }) },
 }))
 
 function persistView(get: () => EditorStore): void {
-  const { showColumnDividers, showRowLines, activeSkin, showFps, playbackMode, fieldZoom, showNoteCounter, railColoring, rhythmColoring, hitSounds, musicVolume } = get()
-  saveViewSettings({ showColumnDividers, showRowLines, activeSkin, showFps, playbackMode, fieldZoom, showNoteCounter, railColoring, rhythmColoring, hitSounds, musicVolume })
+  const { showColumnDividers, showRowLines, activeSkin, showFps, playbackMode, fieldZoom, showNoteCounter, railColoring, rhythmColoring, hitSounds, metronome, musicVolume } = get()
+  saveViewSettings({ showColumnDividers, showRowLines, activeSkin, showFps, playbackMode, fieldZoom, showNoteCounter, railColoring, rhythmColoring, hitSounds, metronome, musicVolume })
 }

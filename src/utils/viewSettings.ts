@@ -46,6 +46,7 @@ export interface ViewSettings {
   railColoring: RailColoring
   rhythmColoring: boolean
   hitSounds: boolean
+  metronome: boolean
   musicVolume: number
 }
 
@@ -60,6 +61,7 @@ const DEFAULTS: ViewSettings = {
   railColoring: 'none',
   rhythmColoring: false,
   hitSounds: false,
+  metronome: false,
   musicVolume: 1,
 }
 
@@ -96,6 +98,7 @@ export function loadViewSettings(): ViewSettings {
       rhythmColoring:
         typeof parsed.rhythmColoring === 'boolean' ? parsed.rhythmColoring : DEFAULTS.rhythmColoring,
       hitSounds: typeof parsed.hitSounds === 'boolean' ? parsed.hitSounds : DEFAULTS.hitSounds,
+      metronome: typeof parsed.metronome === 'boolean' ? parsed.metronome : DEFAULTS.metronome,
       musicVolume: clampVolume(parsed.musicVolume),
     }
   } catch {

@@ -31,6 +31,16 @@ export default defineConfig({
           { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: '/icon-512.png', sizes: '512x512', type: 'image/png' },
         ],
+        // Открытие чартов через ОС в установленном PWA (launchQueue в main.tsx).
+        file_handlers: [
+          {
+            action: '/',
+            accept: {
+              'text/plain': ['.ucs'],
+              'application/json': ['.json', '.piu.json'],
+            },
+          },
+        ],
       },
     }),
   ],

@@ -18,7 +18,14 @@ PWA: vite-plugin-pwa (Workbox), ручное обновление через `us
 - **Difficulty**: цифровая 1–29, без именованных уровней
 - **Delay**: ненулевой только для первых блоков или пауз между блоками
 - **Undo/redo**: `zundo` Zustand middleware, глубина 50 операций; Ctrl+Z, Ctrl+Y
-- **Клавиши**: Space = play/pause, Ctrl+S = сохранить, Ctrl+Z/Y = undo/redo
+- **Клавиши**: Space = play/pause, Ctrl+S = сохранить, Ctrl+Z/Y = undo/redo, Ctrl+N/O/W = таб-операции, Ctrl+Tab = перебор табов, ↑↓/PgUp/PgDn/Home/End = навигация, Ctrl+колесо = зум. Полная справка: `docs/KEYBOARD.md`
+- **Выделение**: `editorStore.selection` — `rows` (диапазон строк одного блока) | `block` (весь блок); Shift+клик/drag, Ctrl+A, Esc. Не в undo-истории, не персистится
+- **Операции над выделением** (`services/selectionOps.ts`): Delete, Ctrl+C/X/V (внутренний клипборд), Ctrl+Shift+V (вставка со сдвигом колонок), X/Y/M (flip h/v/mirror)
+- **Операции над блоками** (`utils/blockOps.ts` + кнопки в BlockSettingsPopup): split here / merge with next / delete below; смена Split пересчитывает строки нот (adjust beat-split); resize блока перетаскиванием нижней границы за рельсу
+- **Ввод нот**: Alt+drag = серия тапов; live-запись при playback: Z/Q/S/E/C (кол. 0–4) и NumPad 1/7/5/9/3 (кол. 5–9)
+- **Метроном**: чекбокс Metronome, тики на долях (`computeMetronomeTicks` в `utils/hitSounds.ts`)
+- **Drag&drop файлов** в окно + PWA `file_handlers` (`launchQueue` в main.tsx). Файловые операции централизованы в `services/fileActions.ts`
+- Фичи перенесены из StepEdit Lite по плану `PLAN_STEPEDIT.md` (выполнен целиком)
 
 ## Геометрия (`src/utils/geometry.ts`)
 

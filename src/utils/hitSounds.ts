@@ -44,3 +44,29 @@ const HIT_FREQ: Record<number, number> = {
 export function hitSoundFreq(q: number): number {
   return HIT_FREQ[q] ?? 988
 }
+
+export interface MetronomeTick {
+  ms: number
+  accent: boolean // первая доля такта
+}
+
+// Тики метронома: на каждой доле бита (каждые split строк), акцент — на первой
+// доле такта. Частоты ниже хит-саундов (880+), чтобы слои не сливались на слух.
+export function computeMetronomeTicks(blocks: Block[]): MetronomeTick[] {
+  const offsets = computeBlockOffsets(blocks)
+  const ticks: MetronomeTick[] = []
+  blocks.forEach((b, i) => {
+    const off = offsets[i]
+    if (!off || b.split <= 0) return
+    const rows = b.rowCount ?? Math.round(b.beat * b.split * b.measures)
+    for (let k = 0; k * b.split < rows; k++) {
+      ticks.push({ ms: off.startMs + k * b.split * off.msPerRow, accent: k % b.beat === 0 })
+    }
+  })
+  ticks.sort((a, b) => a.ms - b.ms)
+  return ticks
+}
+
+export function metronomeFreq(accent: boolean): number {
+  return accent ? 660 : 440
+}

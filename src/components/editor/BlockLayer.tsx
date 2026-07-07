@@ -159,13 +159,13 @@ interface Props {
   totalRows: number
   height: number
   notesWidth: number
-  previewNote: Note | null
+  previewNotes: Note[] | null
 }
 
 // Один блок: только ноты (сетка вынесена в отдельный GridBlock-слой). Мемоизирован
 // и не зависит от прокрутки — во время playback не ре-рендерится вовсе (двигается
 // только transform родителя).
-export const BlockLayer = memo(function BlockLayer({ block, startY, rh, cw, totalRows, height, notesWidth, previewNote }: Props) {
+export const BlockLayer = memo(function BlockLayer({ block, startY, rh, cw, totalRows, height, notesWidth, previewNotes }: Props) {
   const skin = useEditorStore(s => s.activeSkin)
   const rhythmColoring = useEditorStore(s => s.rhythmColoring)
   const isBlocks = skin === 'blocks'
@@ -179,9 +179,9 @@ export const BlockLayer = memo(function BlockLayer({ block, startY, rh, cw, tota
           ? <BlocksSprite key={i} note={note} rh={rh} cw={cw} totalRows={totalRows} color={colorOf(note)} />
           : <ImageSprite key={i} note={note} rh={rh} cw={cw} totalRows={totalRows} skin={skin} color={colorOf(note)} />
       )}
-      {previewNote && (isBlocks
-        ? <BlocksSprite note={previewNote} rh={rh} cw={cw} totalRows={totalRows} ghost color={colorOf(previewNote)} />
-        : <ImageSprite note={previewNote} rh={rh} cw={cw} totalRows={totalRows} skin={skin} ghost color={colorOf(previewNote)} />)}
+      {previewNotes?.map((note, i) => (isBlocks
+        ? <BlocksSprite key={`p${i}`} note={note} rh={rh} cw={cw} totalRows={totalRows} ghost color={colorOf(note)} />
+        : <ImageSprite key={`p${i}`} note={note} rh={rh} cw={cw} totalRows={totalRows} skin={skin} ghost color={colorOf(note)} />))}
     </div>
   )
 })

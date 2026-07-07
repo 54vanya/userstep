@@ -1,7 +1,9 @@
 import { useRef, useLayoutEffect, useState } from 'react'
 import { Trash2 } from 'lucide-react'
 import { useChart } from '@/hooks/useChart'
+import { useEditorStore } from '@/store/editorStore'
 import { blockRowCount } from '@/utils/geometry'
+import { blockRowAtMs } from '@/utils/timing'
 
 const BEAT_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 12, 16]
 const SPLIT_OPTIONS = [1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 128]
@@ -23,10 +25,22 @@ interface Props {
 }
 
 export function BlockSettingsPopup({ blockId, index, top, left, editorTop, editorBottom, onClose }: Props) {
-  const { chart, updateBlock, insertBlockAfter, deleteBlock } = useChart()
+  const { chart, updateBlock, insertBlockAfter, deleteBlock, splitBlockAt, mergeWithNext, deleteBelow } = useChart()
   const block = chart?.blocks.find(b => b.id === blockId)
   const popupRef = useRef<HTMLDivElement>(null)
   const [clampedTop, setClampedTop] = useState(top)
+
+  // Строка-цель для Split/Delete below: начало rows-выделения в этом блоке,
+  // иначе — строка под плейхедом (если он в этом блоке).
+  const selection = useEditorStore(s => s.selection)
+  const currentTime = useEditorStore(s => s.currentTime)
+  let targetRow: number | null = null
+  if (selection?.kind === 'rows' && selection.blockId === blockId) {
+    targetRow = selection.fromRow
+  } else if (chart) {
+    const pos = blockRowAtMs(chart.blocks, currentTime)
+    if (pos && chart.blocks[pos.blockIdx]?.id === blockId) targetRow = pos.row
+  }
 
   useLayoutEffect(() => {
     const el = popupRef.current
@@ -147,7 +161,57 @@ export function BlockSettingsPopup({ blockId, index, top, left, editorTop, edito
           />
         </FieldRow>
       </div>
+      <div className="px-3 pb-2 pt-1 border-t border-border space-y-1">
+        {(() => {
+          const rows = blockRowCount(block)
+          const canCut = targetRow !== null && targetRow > 0 && targetRow < rows
+          const isLast = index === chart.blocks.length - 1
+          return (
+            <>
+              <ActionButton
+                disabled={!canCut}
+                onClick={() => splitBlockAt(blockId, targetRow!)}
+                title="Разрезать блок на два по строке выделения/плейхеда"
+              >
+                Split here{canCut ? ` (row ${targetRow})` : ''}
+              </ActionButton>
+              <ActionButton
+                disabled={isLast}
+                onClick={() => mergeWithNext(blockId)}
+                title="Слить со следующим блоком (свойства — от этого блока)"
+              >
+                Merge with next
+              </ActionButton>
+              <ActionButton
+                disabled={!canCut}
+                onClick={() => deleteBelow(blockId, targetRow!)}
+                title="Удалить всё ниже строки выделения/плейхеда"
+              >
+                Delete below{canCut ? ` (row ${targetRow})` : ''}
+              </ActionButton>
+            </>
+          )
+        })()}
+      </div>
     </div>
+  )
+}
+
+function ActionButton({ disabled, onClick, title, children }: {
+  disabled?: boolean
+  onClick: () => void
+  title?: string
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      disabled={disabled}
+      onClick={onClick}
+      title={title}
+      className="w-full text-left px-2 py-1 rounded border border-border bg-secondary text-secondary-foreground hover:bg-accent transition-colors disabled:opacity-40 disabled:hover:bg-secondary"
+    >
+      {children}
+    </button>
   )
 }
 

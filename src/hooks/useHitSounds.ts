@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useEditorStore } from '@/store/editorStore'
 import { useTabsStore } from '@/store/tabsStore'
 import { audioEngine } from '@/services/audioEngine'
-import { computeHitSounds, hitSoundFreq } from '@/utils/hitSounds'
+import { computeHitSounds, hitSoundFreq, computeMetronomeTicks, metronomeFreq } from '@/utils/hitSounds'
 
 // Озвучка нот, прилетающих к верхней черте (курсору), во время воспроизведения.
 // Планирование с упреждением: каждые ~40мс ставим бипы на горизонт LOOKAHEAD вперёд
@@ -42,4 +42,30 @@ export function useHitSounds() {
     const timer = window.setInterval(schedule, 40)
     return () => window.clearInterval(timer)
   }, [hitSounds, isPlaying, blocks])
+
+  // Метроном: тот же lookahead-планировщик, но события — доли бита (каждые split
+  // строк), акцентированная первая доля такта. Отдельный трек от хит-саундов.
+  const metronome = useEditorStore(s => s.metronome)
+  useEffect(() => {
+    if (!metronome || !isPlaying || !blocks) return
+    const ticks = computeMetronomeTicks(blocks)
+    if (ticks.length === 0) return
+
+    const LOOKAHEAD_MS = 70
+    let idx = 0
+    const start = audioEngine.getCurrentMs()
+    while (idx < ticks.length && ticks[idx].ms < start - 1) idx++
+
+    const schedule = () => {
+      const horizon = audioEngine.getCurrentMs() + LOOKAHEAD_MS
+      while (idx < ticks.length && ticks[idx].ms <= horizon) {
+        const t = ticks[idx++]
+        const at = audioEngine.msToCtxTime(t.ms)
+        if (at != null) audioEngine.scheduleBeep(metronomeFreq(t.accent), at, 0.04, t.accent ? 0.7 : 0.45)
+      }
+    }
+    schedule()
+    const timer = window.setInterval(schedule, 40)
+    return () => window.clearInterval(timer)
+  }, [metronome, isPlaying, blocks])
 }

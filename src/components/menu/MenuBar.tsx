@@ -1,30 +1,12 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
-import { audioEngine } from '@/services/audioEngine'
 import { useTabsStore } from '@/store/tabsStore'
 import { useEditorStore } from '@/store/editorStore'
-import { parseUcs } from '@/services/ucsParser'
-import { serializeToUcs } from '@/services/ucsSerializer'
-
-function downloadFile(name: string, content: string, mime: string) {
-  const blob = new Blob([content], { type: mime })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = name
-  a.click()
-  URL.revokeObjectURL(url)
-}
-
-function pickFile(accept: string, onPick: (file: File) => void) {
-  const input = document.createElement('input')
-  input.type = 'file'
-  input.accept = accept
-  input.onchange = () => {
-    const file = input.files?.[0]
-    if (file) onPick(file)
-  }
-  input.click()
-}
+import {
+  importUcsViaDialog,
+  openPiuViaDialog,
+  exportActiveUcs,
+  saveActivePiu,
+} from '@/services/fileActions'
 
 const MenuCloseCtx = createContext<() => void>(() => {})
 
@@ -112,10 +94,9 @@ export function MenuBar() {
   const [open, setOpen] = useState<string | null>(null)
   const barRef = useRef<HTMLDivElement>(null)
 
-  const { tabs, activeTabId, addTab, setTabScale, setTabPlaybackRate } = useTabsStore()
+  const { tabs, activeTabId, addTab } = useTabsStore()
   const activeTab = tabs.find(t => t.id === activeTabId)
   const {
-    currentTime, setCurrentTime,
     showColumnDividers, setShowColumnDividers,
     showRowLines, setShowRowLines,
     activeSkin, setActiveSkin,
@@ -141,65 +122,16 @@ export function MenuBar() {
     }
   }, [open])
 
-  const handleImportUcs = () => pickFile('.ucs', file => {
-    const reader = new FileReader()
-    reader.onload = e => {
-      try {
-        const chart = parseUcs(e.target?.result as string)
-        const label = file.name.replace(/\.ucs$/i, '')
-        chart.meta.title = label
-        addTab(chart, label)
-      } catch {
-        alert('Failed to parse UCS file')
-      }
-    }
-    reader.readAsText(file)
-  })
-
-  const handleLoadPiu = () => pickFile('.json,.piu.json', file => {
-    const reader = new FileReader()
-    reader.onload = e => {
-      try {
-        const chart = JSON.parse(e.target?.result as string)
-        const label = chart.meta?.title || file.name.replace(/\.piu\.json$|\.json$/, '')
-        const tabId = addTab(chart, label)
-        if (chart.editorSettings) {
-          setTabScale(tabId, chart.editorSettings.scale)
-          setTabPlaybackRate(tabId, chart.editorSettings.playbackRate)
-          audioEngine.setPlaybackRate(chart.editorSettings.playbackRate)
-          setCurrentTime(chart.editorSettings.currentTime)
-        }
-      } catch {
-        alert('Failed to parse .piu.json file')
-      }
-    }
-    reader.readAsText(file)
-  })
-
-  const handleExportUcs = () => {
-    if (!activeTab) return
-    downloadFile(`${activeTab.label}.ucs`, serializeToUcs(activeTab.chart), 'text/plain')
-  }
-
-  const handleSavePiu = () => {
-    if (!activeTab) return
-    const chartWithSettings = {
-      ...activeTab.chart,
-      editorSettings: { scale: activeTab.scale, playbackRate: activeTab.playbackRate, currentTime },
-    }
-    downloadFile(`${activeTab.label}.piu.json`, JSON.stringify(chartWithSettings, null, 2), 'application/json')
-  }
-
   return (
     <div ref={barRef} className="flex items-stretch h-9 border-b border-r border-border bg-card shrink-0 text-xs select-none">
       <MenuButton label="File" id="file" open={open} setOpen={setOpen}>
         <Item onClick={() => addTab()}>New chart</Item>
         <Separator />
-        <Item onClick={handleImportUcs}>Import .ucs…</Item>
-        <Item onClick={handleLoadPiu}>Open .piu.json…</Item>
+        <Item onClick={importUcsViaDialog}>Import .ucs…</Item>
+        <Item onClick={openPiuViaDialog}>Open .piu.json…</Item>
         <Separator />
-        <Item onClick={handleExportUcs} disabled={!activeTab}>Export .ucs</Item>
-        <Item onClick={handleSavePiu} disabled={!activeTab}>Save .piu.json</Item>
+        <Item onClick={exportActiveUcs} disabled={!activeTab}>Export .ucs</Item>
+        <Item onClick={saveActivePiu} disabled={!activeTab}>Save .piu.json</Item>
       </MenuButton>
 
       <MenuButton label="View" id="view" open={open} setOpen={setOpen}>

@@ -171,7 +171,7 @@ export const useTabsStore = create<TabsState>()(
                 ? { scale: Math.min(15, Math.max(1, settings.scale)) }
                 : {}),
               ...(settings?.playbackRate !== undefined
-                ? { playbackRate: Math.round(Math.min(1.5, Math.max(0.5, settings.playbackRate)) * 10) / 10 }
+                ? { playbackRate: Math.round(Math.min(4, Math.max(0.2, settings.playbackRate)) * 100) / 100 }
                 : {}),
             }
           }),
@@ -208,7 +208,9 @@ export const useTabsStore = create<TabsState>()(
       },
 
       setTabPlaybackRate: (tabId, rate) => {
-        const clamped = Math.round(Math.min(1.5, Math.max(0.5, rate)) * 10) / 10
+        // Диапазон ~как у StepEdit Lite (до 4×); минимум 0.2, чтобы шаг слайдера
+        // 0.1 попадал ровно в 1.0.
+        const clamped = Math.round(Math.min(4, Math.max(0.2, rate)) * 100) / 100
         set(state => ({
           tabs: state.tabs.map(t => t.id === tabId ? { ...t, playbackRate: clamped } : t),
         }))

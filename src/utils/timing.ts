@@ -13,6 +13,30 @@ export function computeBlockOffsets(blocks: Block[]): BlockOffset[] {
   })
 }
 
+export function formatMs(ms: number): string {
+  const total = Math.max(0, Math.round(ms))
+  const m = Math.floor(total / 60000)
+  const s = Math.floor((total % 60000) / 1000)
+  const milli = total % 1000
+  return `${m}:${String(s).padStart(2, '0')}.${String(milli).padStart(3, '0')}`
+}
+
+// Блок и строка под плейхедом (ближайшая линия к моменту ms). Для Ctrl+A и
+// вставки из клипборда: «текущая позиция» без пиксельных layout'ов.
+export function blockRowAtMs(blocks: Block[], ms: number): { blockIdx: number; row: number } | null {
+  if (blocks.length === 0) return null
+  const offsets = computeBlockOffsets(blocks)
+  for (let i = 0; i < blocks.length; i++) {
+    const rows = blockRowCount(blocks[i])
+    const end = offsets[i].startMs + rows * offsets[i].msPerRow
+    if (ms < end || i === blocks.length - 1) {
+      const row = Math.min(rows - 1, Math.max(0, Math.round((ms - offsets[i].startMs) / offsets[i].msPerRow)))
+      return { blockIdx: i, row }
+    }
+  }
+  return null
+}
+
 export function msToScrollY(ms: number, offsets: BlockOffset[], layouts: BlockLayout[]): number {
   if (offsets.length === 0) return 0
   for (let i = offsets.length - 1; i >= 0; i--) {
