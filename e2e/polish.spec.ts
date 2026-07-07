@@ -64,6 +64,27 @@ test('drag&drop .ucs открывает новую вкладку', async ({ pag
   await expect(tabs.nth(1)).toContainText('test')
 })
 
+test('модалка шорткатов открывается из File-меню и закрывается по Esc', async ({ page }) => {
+  await openEmptyChart(page)
+  await page.click('text=File')
+  await page.click('text=Keyboard shortcuts…')
+
+  const modal = page.getByTestId('shortcuts-modal')
+  await expect(modal).toBeVisible()
+  await expect(modal).toContainText('Горячие клавиши')
+  await expect(modal).toContainText('Live-запись')
+
+  await page.keyboard.press('Escape')
+  await expect(modal).not.toBeVisible()
+
+  // Клик по фону тоже закрывает
+  await page.click('text=File')
+  await page.click('text=Keyboard shortcuts…')
+  await expect(modal).toBeVisible()
+  await page.mouse.click(10, 500)
+  await expect(modal).not.toBeVisible()
+})
+
 test('чекбокс Metronome есть и персистится', async ({ page }) => {
   await openEmptyChart(page)
   const cb = page.locator('label:has-text("Metronome") input')

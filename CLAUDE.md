@@ -18,7 +18,7 @@ PWA: vite-plugin-pwa (Workbox), ручное обновление через `us
 - **Difficulty**: цифровая 1–29, без именованных уровней
 - **Delay**: ненулевой только для первых блоков или пауз между блоками
 - **Undo/redo**: `zundo` Zustand middleware, глубина 50 операций; Ctrl+Z, Ctrl+Y
-- **Клавиши**: Space = play/pause, Ctrl+S = сохранить, Ctrl+Z/Y = undo/redo, Ctrl+N/O/W = таб-операции, Ctrl+Tab = перебор табов, ↑↓/PgUp/PgDn/Home/End = навигация, Ctrl+колесо = зум. Полная справка: `docs/KEYBOARD.md`
+- **Клавиши**: Space = play/pause, Ctrl+S = сохранить, Ctrl+Z/Y = undo/redo, Ctrl+N/O/W = таб-операции, Ctrl+Tab = перебор табов, ↑↓/PgUp/PgDn/Home/End = навигация, Ctrl+колесо = зум. Полная справка: `docs/KEYBOARD.md` и в приложении (File → Keyboard shortcuts, `ShortcutsModal.tsx`)
 - **Выделение**: `editorStore.selection` — `rows` (диапазон строк одного блока) | `block` (весь блок); Shift+клик/drag, Ctrl+A, Esc. Не в undo-истории, не персистится
 - **Операции над выделением** (`services/selectionOps.ts`): Delete, Ctrl+C/X/V (внутренний клипборд), Ctrl+Shift+V (вставка со сдвигом колонок), X/Y/M (flip h/v/mirror)
 - **Операции над блоками** (`utils/blockOps.ts` + кнопки в BlockSettingsPopup): split here / merge with next / delete below; смена Split пересчитывает строки нот (adjust beat-split); resize блока перетаскиванием нижней границы за рельсу

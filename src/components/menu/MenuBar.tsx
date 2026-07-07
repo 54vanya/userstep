@@ -7,6 +7,7 @@ import {
   exportActiveUcs,
   saveActivePiu,
 } from '@/services/fileActions'
+import { ShortcutsModal } from './ShortcutsModal'
 
 const MenuCloseCtx = createContext<() => void>(() => {})
 
@@ -92,6 +93,7 @@ function SectionLabel({ children }: { children: ReactNode }) {
 
 export function MenuBar() {
   const [open, setOpen] = useState<string | null>(null)
+  const [showShortcuts, setShowShortcuts] = useState(false)
   const barRef = useRef<HTMLDivElement>(null)
 
   const { tabs, activeTabId, addTab } = useTabsStore()
@@ -132,6 +134,8 @@ export function MenuBar() {
         <Separator />
         <Item onClick={exportActiveUcs} disabled={!activeTab}>Export .ucs</Item>
         <Item onClick={saveActivePiu} disabled={!activeTab}>Save .piu.json</Item>
+        <Separator />
+        <Item onClick={() => setShowShortcuts(true)}>Keyboard shortcuts…</Item>
       </MenuButton>
 
       <MenuButton label="View" id="view" open={open} setOpen={setOpen}>
@@ -160,6 +164,7 @@ export function MenuBar() {
         <Radio on={theme === 'light'} onSelect={() => setTheme('light')}>Light</Radio>
         <Radio on={theme === 'dark'} onSelect={() => setTheme('dark')}>Dark</Radio>
       </MenuButton>
+      {showShortcuts && <ShortcutsModal onClose={() => setShowShortcuts(false)} />}
     </div>
   )
 }
