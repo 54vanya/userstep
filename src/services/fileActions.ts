@@ -2,11 +2,13 @@
 // шорткатов (Ctrl+N/O/W/S, Ctrl+Tab). Работают через getState, поэтому вызываемы
 // вне React-компонентов.
 import { set as idbSet } from 'idb-keyval'
+import type { Chart } from '@/types/chart'
 import { useTabsStore } from '@/store/tabsStore'
 import { useEditorStore } from '@/store/editorStore'
 import { audioEngine } from './audioEngine'
 import { parseUcs } from './ucsParser'
 import { serializeToUcs } from './ucsSerializer'
+import { isValidChart } from '@/utils/chartGuard'
 
 export function downloadFile(name: string, content: string, mime: string): void {
   const blob = new Blob([content], { type: mime })
@@ -29,40 +31,89 @@ export function pickFile(accept: string, onPick: (file: File) => void): void {
   input.click()
 }
 
-export function importUcsFile(file: File): void {
+function readFileText(file: File, onText: (text: string) => void): void {
   const reader = new FileReader()
-  reader.onload = e => {
-    try {
-      const chart = parseUcs(e.target?.result as string)
-      const label = file.name.replace(/\.ucs$/i, '')
-      chart.meta.title = label
-      useTabsStore.getState().addTab(chart, label)
-    } catch {
-      alert('Failed to parse UCS file')
-    }
-  }
+  reader.onload = e => onText(e.target?.result as string)
   reader.readAsText(file)
 }
 
-export function openPiuFile(file: File): void {
-  const reader = new FileReader()
-  reader.onload = e => {
-    try {
-      const chart = JSON.parse(e.target?.result as string)
-      const label = chart.meta?.title || file.name.replace(/\.piu\.json$|\.json$/, '')
-      const { addTab, setTabScale, setTabPlaybackRate } = useTabsStore.getState()
-      const tabId = addTab(chart, label)
-      if (chart.editorSettings) {
-        setTabScale(tabId, chart.editorSettings.scale)
-        setTabPlaybackRate(tabId, chart.editorSettings.playbackRate)
-        audioEngine.setPlaybackRate(chart.editorSettings.playbackRate)
-        useEditorStore.getState().setCurrentTime(chart.editorSettings.currentTime)
-      }
-    } catch {
-      alert('Failed to parse .piu.json file')
-    }
+// Разбор содержимого .ucs / .piu.json с алертом при ошибке. Единственная точка
+// парсинга и валидации: и «в новый таб», и «в пустой таб» (WelcomeScreen) идут
+// через неё — битый файл не должен доезжать до стора ни одним путём.
+function parseUcsText(text: string, fileName: string): { chart: Chart; label: string } | null {
+  try {
+    const chart = parseUcs(text)
+    const label = fileName.replace(/\.ucs$/i, '')
+    chart.meta.title = label
+    return { chart, label }
+  } catch {
+    alert('Failed to parse UCS file')
+    return null
   }
-  reader.readAsText(file)
+}
+
+function parsePiuText(text: string, fileName: string): { chart: Chart; label: string } | null {
+  try {
+    const chart = JSON.parse(text)
+    // Любой валидный JSON без формы чарта уронил бы рендер, а сессия сохранила
+    // бы битый таб → крэш при каждом запуске.
+    if (!isValidChart(chart)) {
+      alert('Not a valid .piu.json chart file')
+      return null
+    }
+    const label = chart.meta.title || fileName.replace(/\.piu\.json$|\.json$/i, '')
+    return { chart, label }
+  } catch {
+    alert('Failed to parse .piu.json file')
+    return null
+  }
+}
+
+// editorSettings из файла — только конечные числа (в старых/чужих файлах поля
+// могут отсутствовать; NaN в scale/rate ломал бы геометрию и плейбек).
+function applyEditorSettings(tabId: string, settings: Chart['editorSettings']): void {
+  if (!settings) return
+  const { setTabScale, setTabPlaybackRate } = useTabsStore.getState()
+  const { scale, playbackRate, currentTime } = settings
+  if (Number.isFinite(scale)) setTabScale(tabId, scale)
+  if (Number.isFinite(playbackRate)) {
+    setTabPlaybackRate(tabId, playbackRate)
+    audioEngine.setPlaybackRate(playbackRate)
+  }
+  if (Number.isFinite(currentTime)) useEditorStore.getState().setCurrentTime(currentTime)
+}
+
+export function importUcsFile(file: File): void {
+  readFileText(file, text => {
+    const parsed = parseUcsText(text, file.name)
+    if (parsed) useTabsStore.getState().addTab(parsed.chart, parsed.label)
+  })
+}
+
+export function openPiuFile(file: File): void {
+  readFileText(file, text => {
+    const parsed = parsePiuText(text, file.name)
+    if (!parsed) return
+    const tabId = useTabsStore.getState().addTab(parsed.chart, parsed.label)
+    applyEditorSettings(tabId, parsed.chart.editorSettings)
+  })
+}
+
+// Импорт в существующий пустой таб (WelcomeScreen) — тот же разбор/валидация.
+export function importUcsIntoTab(tabId: string, file: File): void {
+  readFileText(file, text => {
+    const parsed = parseUcsText(text, file.name)
+    if (parsed) useTabsStore.getState().importChartIntoTab(tabId, parsed.chart, parsed.label)
+  })
+}
+
+export function openPiuIntoTab(tabId: string, file: File): void {
+  readFileText(file, text => {
+    const parsed = parsePiuText(text, file.name)
+    if (!parsed) return
+    useTabsStore.getState().importChartIntoTab(tabId, parsed.chart, parsed.label)
+    applyEditorSettings(tabId, parsed.chart.editorSettings)
+  })
 }
 
 export function importUcsViaDialog(): void {

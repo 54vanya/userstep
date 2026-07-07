@@ -1,6 +1,6 @@
 # PIU StepMaker — CLAUDE.md
 
-PWA-редактор степчартов для Pump It Up. Аналог UCSLite. Офлайн-работа, импорт/экспорт `.ucs`.
+PWA-редактор степчартов для Pump It Up. Аналог UCSLite / StepEdit Lite. Офлайн-работа, импорт/экспорт `.ucs`.
 
 ## Стек
 
@@ -8,40 +8,51 @@ Vite + React 18 + TypeScript + Zustand (+ zundo для undo) + shadcn/ui + Tailw
 Аудио: нативный Web Audio API. Хранилище аудио-файлов: IndexedDB (idb-keyval).  
 PWA: vite-plugin-pwa (Workbox), ручное обновление через `usePwaUpdate`.
 
+Команды: `pnpm dev` / `pnpm build` / `pnpm test` (vitest, юнит) / `pnpm e2e` (Playwright, сам поднимает dev-сервер).
+
 ## Ключевые решения
 
-- **Форматы**: `.piu.json` (внутренний) + импорт/экспорт `.ucs`
-- **UCS**: ноты — `.`=пусто `X`=tap `M`=hold-start `H`=hold-body `W`=hold-end; блоки разделены заголовками `:BPM=` / `:Delay=` / `:Beat=` / `:Split=`
-- **Курсор**: фиксирован сверху viewport, чарт скроллится снизу вверх при воспроизведении (`CURSOR_LINE_Y = 40` в `geometry.ts`)
-- **Виртуализация**: только строки в ±`BUFFER_PX` (300px) от viewport рендерятся в DOM (`ChartGrid.tsx`)
-- **Табы**: независимые открытые чарты (разные песни/сложности), каждый со своим аудио
-- **Difficulty**: цифровая 1–29, без именованных уровней
-- **Delay**: ненулевой только для первых блоков или пауз между блоками
-- **Undo/redo**: `zundo` Zustand middleware, глубина 50 операций; Ctrl+Z, Ctrl+Y
-- **Клавиши**: Space = play/pause, Ctrl+S = сохранить, Ctrl+Z/Y = undo/redo, Ctrl+N/O/W = таб-операции, Ctrl+Tab = перебор табов, ↑↓/PgUp/PgDn/Home/End = навигация, Ctrl+колесо = зум. Полная справка: `docs/KEYBOARD.md` и в приложении (File → Keyboard shortcuts, `ShortcutsModal.tsx`)
-- **Выделение**: `editorStore.selection` — `rows` (диапазон строк одного блока) | `block` (весь блок); Shift+клик/drag, Ctrl+A, Esc. Не в undo-истории, не персистится
+- **Форматы**: `.piu.json` (внутренний, + `editorSettings`: scale/rush/позиция) + импорт/экспорт `.ucs`
+- **UCS**: ноты — `.`=пусто `X`=tap `M`=hold-start `H`=hold-body `W`=hold-end; блоки разделены заголовками `:BPM=` / `:Delay=` / `:Beat=` / `:Split=`. Заголовки валидируются при парсинге (мусор/0 → дефолты, BPM=120, Beat/Split=4); Delay — дробные мс (`parseFloat`)
+- **Кросс-блочные холды**: один холд через границу блоков — цепочка нот с флагами `continues`/`continued`; вся логика цепочек — в `utils/holds.ts` (`collectHoldChain`, `sanitizeHoldFlags`). Холд без `W` тянется сквозь хвостовые `.` и пустые блоки (гиммики CS241)
+- **Курсор**: фиксирован у верха вьюпорта (`CURSOR_LINE_Y = 40`, умножается на fieldZoom), чарт движется под ним
+- **Playback**: скролл заморожен (`overflowY:hidden`), контент-слой движется `translate3d` в RAF-цикле (`usePlayback`); позиция — линейная функция таймстампа кадра от якоря, ре-якорь на аудио-часы только при разрыве >80мс. Режимы (View → Playback): `snap` (дефолт; сетка контр-трансформом на физический пиксель), `smooth`, `framelock`, `raw`
+- **Рендер**: виртуализации нет — сетка блока рисуется одним `repeating-linear-gradient` фоном (`GridLayer.tsx`), ноты — memo-слой спрайтов на блок (`BlockLayer.tsx`). Разделители блоков не занимают высоту (`BLOCK_DIVIDER_HEIGHT = 0`) — иначе рвались бы координаты скролла
+- **Табы**: независимые открытые чарты, каждый со своим аудио (IndexedDB, ключ `audio:<tabId>`, удаляется при закрытии таба) и своими scale/rush; позиции воспроизведения — в `tabTimes` (Map вне стора, `utils/tabTime.ts`)
+- **Сессия**: localStorage `piu-session` (табы без audioBlob + times), debounce 500ms + синхронный flush на `pagehide`/`visibilitychange:hidden`. При загрузке табы с битым чартом отбрасываются (`utils/chartGuard.ts` — та же валидация защищает импорт `.piu.json`)
+- **Undo/redo**: `zundo` на tabsStore, глубина 50; `equality` пропускает в историю только правки чартов и состава табов (scale/rush/isDirty/audioBlob/переключение таба снэпшотов не создают). Одна операция = один `updateChart` = один снэпшот
+- **Выделение**: `editorStore.selection` — `rows` (диапазон строк одного блока) | `block` (весь блок); Shift+клик/drag, Shift+клик по рельсе, Ctrl+A, Esc. Не в undo-истории, не персистится
 - **Операции над выделением** (`services/selectionOps.ts`): Delete, Ctrl+C/X/V (внутренний клипборд), Ctrl+Shift+V (вставка со сдвигом колонок), X/Y/M (flip h/v/mirror)
-- **Операции над блоками** (`utils/blockOps.ts` + кнопки в BlockSettingsPopup): split here / merge with next / delete below; смена Split пересчитывает строки нот (adjust beat-split); resize блока перетаскиванием нижней границы за рельсу
-- **Ввод нот**: Alt+drag = серия тапов; live-запись при playback: Z/Q/S/E/C (кол. 0–4) и NumPad 1/7/5/9/3 (кол. 5–9)
-- **Метроном**: чекбокс Metronome, тики на долях (`computeMetronomeTicks` в `utils/hitSounds.ts`)
+- **Операции над блоками** (`utils/blockOps.ts` + кнопки в BlockSettingsPopup): split here / merge with next / delete below; смена Split пересчитывает строки нот (adjust beat-split, коллизии после округления схлопываются); resize блока перетаскиванием нижней границы за рельсу
+- **Ввод нот**: клик = tap (по ноте — удалить), drag вниз = hold (через границы блоков), Alt+drag = серия тапов; live-запись при playback — две раскладки (View → Live input keys, `editorStore.liveKeyLayout`): UCS Lite = Z/Q/S/E/C (кол. 0–4) и NumPad 1/7/5/9/3 (кол. 5–9), StepMania = верхний ряд цифр 1…9,0 (кол. 0–9)
+- **Клавиши**: Space = play/pause, Ctrl+S = сохранить, Ctrl+Z/Y = undo/redo, Ctrl+N/O/W = таб-операции, Ctrl+Tab = перебор табов, ↑↓/PgUp/PgDn/Home/End = навигация, Ctrl+колесо = зум поля. Полная справка: `docs/KEYBOARD.md` и в приложении (File → Keyboard shortcuts, `ShortcutsModal.tsx`). Глобальные шорткаты — в `ChartEditor.tsx`, навигация — в `ChartGrid.tsx`; текстовые поля различаются через `utils/dom.ts:isTextEntry` (пробел на слайдерах/чекбоксах уходит в play/pause)
+- **Тулбар**: play, per-tab Scale, Zoom поля (50–300%), Rush 0.2–4×, Volume, счётчик нот (`utils/noteCount.ts`), чекбоксы Rhythm coloring / Hit sounds / Metronome
+- **Звуковой ассист** (`utils/hitSounds.ts` + `useHitSounds`): бипы по нотам у курсора (высота зависит от доли) и метроном по долям; планируются наперёд через `audioEngine.scheduleBeep`, идут мимо musicGain (слайдер Volume на них не влияет)
+- **Ритм-окраска** (`utils/rhythmColors.ts`): цвет ноты по доле (4-я/8-я/16-я…), перекраска спрайта через `mix-blend-mode:color` по маске (BlockLayer)
+- **View-настройки** (`utils/viewSettings.ts`, localStorage `piu-view-settings`): линии сетки, скин (basic/blocks), FPS-метр, счётчик нот, окраска секций рельсы, раскладка live-записи, режим playback, зум, звуки; тема (system/light/dark) — отдельно в `utils/theme.ts`
+- **Difficulty**: цифровая 1–29, без именованных уровней
+- **Delay**: ненулевой для первого блока (тишина до старта) или паузы между блоками; сериализатор сохраняет delay всех блоков
+- **AudioEngine** (singleton): `resume()` suspended-контекста при play (автоплей-политика после восстановления сессии), счётчик поколений `loadBlob` против гонки декодирования при переключении табов, фиксация позиции в `onended`
 - **Drag&drop файлов** в окно + PWA `file_handlers` (`launchQueue` в main.tsx). Файловые операции централизованы в `services/fileActions.ts`
-- Фичи перенесены из StepEdit Lite по плану `PLAN_STEPEDIT.md` (выполнен целиком)
+- Функциональность и раскладки повторяют StepEdit Lite (декомпилированный эталон)
 
 ## Геометрия (`src/utils/geometry.ts`)
 
 ```
-rowHeight = BASE_BEAT_HEIGHT(32) * scale / split
+rowHeight = BASE_BEAT_HEIGHT(32) * scale / split      (scale = tab.scale * fieldZoom/100)
 blockPixelHeight = rowCount * rowHeight
-BLOCK_DIVIDER_HEIGHT = 0   // нулевая высота! линия только border-t, не занимает layout
-COLUMN_WIDTH = 40
+BLOCK_DIVIDER_HEIGHT = 0   // делитель блоков не занимает layout
+COLUMN_WIDTH = 40          // умножается на fieldZoom/100 (cw)
 ```
 
-`BLOCK_DIVIDER_HEIGHT = 0` намеренно: делитель блоков — чисто визуальный `border-t`, не влияет на layout и не создаёт разрыв в координатах скролла (иначе при переходе между блоками playback прыгал бы).
+`blockRowCount = rowCount ?? round(beat*split*measures)` — `rowCount` авторитетен (целый), `measures` дробное (неполные такты в гиммик-чартах).  
+Хит-тест: `hitLine` (зона-квадрат вокруг линии, мёртвые зоны в редких блоках) / `snapRow` (ближайшая линия без мёртвых зон — для холдов и выделения).
 
 ## Тайминг (`src/utils/timing.ts`)
 
-`computeBlockOffsets` → массив `{ startMs, msPerRow }` для каждого блока (учитывает `delay`).  
-`msToScrollY` / `scrollYToMs` — конвертация между временем и пикселями через `blockLayouts`.
+`computeBlockOffsets` → `{ startMs, msPerRow }` для каждого блока (учитывает `delay`).  
+`msToScrollY` / `scrollYToMs` — конвертация время↔пиксели через `blockLayouts`; `msToScrollY` клампит строку концом блока (у Delay нет пикселей — конвейер паузится на границе).  
+`blockRowAtMs` — блок+строка под плейхедом (Ctrl+A, вставка, live-запись).
 
 ## Структура
 
@@ -49,33 +60,55 @@ COLUMN_WIDTH = 40
 src/
 ├── types/chart.ts            — Note, Block, Chart, Tab, BlockOffset
 ├── store/
-│   ├── tabsStore.ts          — открытые табы, активный таб
-│   └── editorStore.ts        — scale, scroll, isPlaying, currentTime
+│   ├── tabsStore.ts          — табы, активный таб; zundo + equality; flush сессии
+│   └── editorStore.ts        — isPlaying, currentTime, selection, view-настройки
 ├── services/
-│   ├── ucsParser.ts          — .ucs → Chart
-│   ├── ucsSerializer.ts      — Chart → .ucs
-│   ├── audioEngine.ts        — singleton Web Audio (load/play/pause/seek/getCurrentMs)
-│   └── sessionStorage.ts     — сохранение табов в localStorage (debounce 500ms)
+│   ├── ucsParser.ts          — .ucs → Chart (валидация заголовков, carryOver холдов)
+│   ├── ucsSerializer.ts      — Chart → .ucs / .piu.json
+│   ├── audioEngine.ts        — singleton Web Audio (play/pause/getCurrentMs/scheduleBeep)
+│   ├── fileActions.ts        — импорт/экспорт/открытие файлов, таб-операции (меню+шорткаты)
+│   ├── selectionOps.ts       — delete/copy/cut/paste/flip выделения, клипборд
+│   └── sessionStorage.ts     — save/load сессии (валидация через chartGuard)
 ├── hooks/
-│   ├── useEditor.ts          — pointer events → tap/hold/delete
-│   ├── usePlayback.ts        — RAF loop: getCurrentMs → msToScrollY → scrollTop
-│   ├── useAudio.ts           — загрузка аудио + IndexedDB
+│   ├── useChart.ts           — операции над чартом активного таба (add/remove note, блоки)
+│   ├── useEditor.ts          — pointer events → tap/hold/удаление/выделение/серия тапов
+│   ├── usePlayback.ts        — RAF-цикл playback (transform, режимы snap/smooth/…)
+│   ├── useAudio.ts           — загрузка аудио (IndexedDB), отмена при смене таба
+│   ├── useHitSounds.ts       — планирование бипов/метронома при playback
 │   └── usePwaUpdate.ts       — SW update lifecycle
 ├── utils/
-│   ├── geometry.ts           — rowHeight, blockPixelHeight, CONSTANTS
-│   └── timing.ts             — computeBlockOffsets, msToScrollY, scrollYToMs
-└── components/editor/
-    ├── ChartGrid.tsx         — главный компонент: scroll, виртуализация, pointer events
-    ├── NoteRow.tsx           — одна строка нот
-    ├── BlockDivider.tsx      — border-t разделитель блоков (height: 0)
-    ├── Cursor.tsx            — фиксированный плейхед
-    ├── BlockLabels.tsx       — подписи блоков слева (BPM, Beat/Split)
-    └── ColumnHeaders.tsx     — иконки стрелок PIU
+│   ├── geometry.ts           — rowHeight, layouts, hitLine/snapRow, константы
+│   ├── timing.ts             — computeBlockOffsets, msToScrollY/scrollYToMs, blockRowAtMs
+│   ├── blockOps.ts           — splitBlockAt / mergeWithNext / deleteBelow (чистые)
+│   ├── holds.ts              — collectHoldChain, sanitizeHoldFlags
+│   ├── hitSounds.ts          — computeHitSounds, computeMetronomeTicks, частоты
+│   ├── noteCount.ts          — computeHitTimes, countPassed (счётчик нот)
+│   ├── rhythmColors.ts       — цвет ноты по доле
+│   ├── chartGuard.ts         — isValidChart (импорт .piu.json, восстановление сессии)
+│   ├── viewSettings.ts       — типы+персист view-настроек (localStorage)
+│   ├── theme.ts, tabTime.ts, dom.ts
+├── components/
+│   ├── editor/
+│   │   ├── ChartEditor.tsx   — глобальные шорткаты, live-запись, обёртка грида
+│   │   ├── ChartGrid.tsx     — главный: layout, скролл, попап блока, resize, статус-бар
+│   │   ├── GridLayer.tsx     — сетка блока одним gradient-фоном (pixel-snap слой)
+│   │   ├── BlockLayer.tsx    — спрайты нот блока (memo), ритм-окраска, превью
+│   │   ├── BlockRail.tsx     — рельса справа: BPM/beat/split, клик → попап, + внизу
+│   │   ├── BlockSettingsPopup.tsx, Cursor.tsx, ColumnHeaders.tsx
+│   │   ├── NoteCounterOverlay.tsx, WelcomeScreen.tsx
+│   ├── menu/MenuBar.tsx, menu/ShortcutsModal.tsx
+│   ├── tabs/TabBar.tsx, tabs/TabItem.tsx
+│   ├── toolbar/Toolbar.tsx, sidebar/Sidebar.tsx, FpsMeter.tsx
+└── app/App.tsx               — каркас, drag&drop, PWA-баннер обновления
 ```
 
-## Статус (2026-06-08)
+## Тесты
 
-Все фазы выполнены: сетка, редактирование нот, аудио+playback, файловые операции, PWA, undo, восстановление сессии.
+- Юнит (vitest, `pnpm test`): `ucsParser`, `selectionOps`, `blockOps` — `src/**/__tests__/`
+- E2E (Playwright, `pnpm e2e`): `e2e/*.spec.ts` — редактор, шорткаты, блок-операции, ввод нот
+- Примеры UCS для тестов: `fileExamples/` — CS266, CS349, а также гиммик-чарты CS241 (дробный BPM, Split=128, холды сквозь пустые блоки), CS355, CS677 (+ mp3)
 
-Примеры UCS-файлов для тестов: `fileExamples/CS266.ucs`, `fileExamples/CS349.ucs`.  
-Тесты парсера: `src/services/__tests__/ucsParser.test.ts` (10/10).
+## Статус (2026-07-07)
+
+Функциональность StepEdit Lite перенесена целиком. Известные хвосты — в `TODO.md`
+(пустые сегменты `.` внутри холдов и их подсчёт, UI редактирования сегментов).

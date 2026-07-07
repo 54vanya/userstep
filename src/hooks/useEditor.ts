@@ -3,7 +3,7 @@ import { useTabsStore } from '@/store/tabsStore'
 import { useEditorStore } from '@/store/editorStore'
 import { blockRowCount, hitLine, snapRow } from '@/utils/geometry'
 import type { BlockLayout } from '@/utils/geometry'
-import { collectHoldChain, sanitizeHoldFlags } from '@/utils/holds'
+import { clearColumnSpan, collectHoldChain, noteEnd, sanitizeHoldFlags } from '@/utils/holds'
 import type { Note, Block } from '@/types/chart'
 
 export interface HoldPreview {
@@ -33,25 +33,18 @@ interface DragState {
 }
 
 function isNoteOccupied(block: Block, row: number, col: number): boolean {
-  return block.notes.some(n => {
-    if (n.col !== col) return false
-    if (n.type === 'tap') return n.row === row
-    const endRow = n.endRow ?? n.row
-    return n.row <= row && row <= endRow
-  })
+  return block.notes.some(n => n.col === col && n.row <= row && row <= noteEnd(n))
 }
 
 export function useEditor(
   blockLayouts: BlockLayout[],
-  scrollRef: React.RefObject<HTMLDivElement | null>,
   activeTabId: string | null,
   cols: number,
-  // Эффективная ширина колонки и Y хит-линии (зависят от зума поля).
+  // Эффективная ширина колонки (зависит от зума поля).
   cw: number,
-  cursorY: number,
-  // Во время playback scrollTop заморожен, а слой двигается transform'ом — берём
-  // фактическую позиция воспроизведения, иначе hit-test промахивается.
-  scrollOffset: () => number,
+  // Единая конверсия экран → координаты чарта (ChartGrid.toChartPoint):
+  // учитывает курсор и живую playback-позицию, иначе hit-test промахивается.
+  toChartPoint: (clientX: number, clientY: number) => { px: number; py: number } | null,
 ) {
   const { tabs, updateChart } = useTabsStore()
   const activeTab = tabs.find(t => t.id === activeTabId)
@@ -75,28 +68,18 @@ export function useEditor(
   }, [])
 
   const hitTest = useCallback((clientX: number, clientY: number) => {
-    const el = scrollRef.current
-    if (!el) return null
-    const rect = el.getBoundingClientRect()
-    const px = clientX - rect.left
-    const py = clientY - rect.top + scrollOffset() - cursorY
+    const pt = toChartPoint(clientX, clientY)
+    if (!pt) return null
 
-    const col = Math.floor(px / cw)
+    const col = Math.floor(pt.px / cw)
     if (col < 0 || col >= cols) return null
 
     // Хит-позиция — линия; зона регистрации — квадрат вокруг неё (мёртвые зоны
     // между линиями на редких блоках → hit === null).
-    const hit = hitLine(py, blockLayouts, cw)
+    const hit = hitLine(pt.py, blockLayouts, cw)
     if (!hit) return null
     return { layout: hit.layout, row: hit.row, col }
-  }, [blockLayouts, scrollRef, cols, cw, cursorY, scrollOffset])
-
-  // Y в координатах чарта (та же формула, что в hitTest, но без привязки к колонке).
-  const chartY = useCallback((clientY: number) => {
-    const el = scrollRef.current
-    if (!el) return null
-    return clientY - el.getBoundingClientRect().top + scrollOffset() - cursorY
-  }, [scrollRef, scrollOffset, cursorY])
+  }, [blockLayouts, cols, cw, toChartPoint])
 
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     if (e.button !== 0) return
@@ -105,9 +88,9 @@ export function useEditor(
     // линию без мёртвых зон). Повторный Shift+клик в том же блоке расширяет
     // существующий диапазон до кликнутой строки.
     if (e.shiftKey) {
-      const py = chartY(e.clientY)
-      if (py === null) return
-      const snap = snapRow(py, blockLayouts)
+      const pt = toChartPoint(e.clientX, e.clientY)
+      if (!pt) return
+      const snap = snapRow(pt.py, blockLayouts)
       if (!snap) return
       const { selection, setSelection } = useEditorStore.getState()
       const blockId = snap.layout.block.id
@@ -130,14 +113,11 @@ export function useEditor(
     // Alt+клик / Alt+drag — серия тапов (StepEdit Lite): tap на каждой строке,
     // через которую прошла мышь; колонка фиксируется стартовой.
     if (e.altKey) {
-      const el = scrollRef.current
-      if (!el) return
-      const px = e.clientX - el.getBoundingClientRect().left
-      const col = Math.floor(px / cw)
+      const pt = toChartPoint(e.clientX, e.clientY)
+      if (!pt) return
+      const col = Math.floor(pt.px / cw)
       if (col < 0 || col >= cols) return
-      const py = chartY(e.clientY)
-      if (py === null) return
-      const snap = snapRow(py, blockLayouts)
+      const snap = snapRow(pt.py, blockLayouts)
       if (!snap) return
       const blockId = snap.layout.block.id
       tapSeriesRef.current = {
@@ -171,16 +151,16 @@ export function useEditor(
     }
     ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
     e.preventDefault()
-  }, [hitTest, chartY, blockLayouts, scrollRef, cols, cw, snapshotTapPreview])
+  }, [hitTest, toChartPoint, blockLayouts, cols, cw, snapshotTapPreview])
 
   const onPointerMove = useCallback((e: React.PointerEvent) => {
     // Серия тапов: добавляем каждую строку между прошлой и текущей позицией
     // (быстрая мышь перескакивает строки — интерполируем внутри блока).
     const series = tapSeriesRef.current
     if (series) {
-      const py = chartY(e.clientY)
-      if (py === null) return
-      const snap = snapRow(py, blockLayouts)
+      const pt = toChartPoint(e.clientX, e.clientY)
+      if (!pt) return
+      const snap = snapRow(pt.py, blockLayouts)
       if (!snap) return
       const blockId = snap.layout.block.id
       if (!series.rowsByBlock.has(blockId)) series.rowsByBlock.set(blockId, new Set())
@@ -201,11 +181,11 @@ export function useEditor(
     // в блок якоря (кросс-блочного выделения нет — у блоков разные split).
     const anchor = selAnchorRef.current
     if (anchor) {
-      const py = chartY(e.clientY)
-      if (py === null) return
+      const pt = toChartPoint(e.clientX, e.clientY)
+      if (!pt) return
       const layout = blockLayouts.find(l => l.block.id === anchor.blockId)
       if (!layout) return
-      const rel = Math.round((py - layout.startY) / layout.rh)
+      const rel = Math.round((pt.py - layout.startY) / layout.rh)
       const row = Math.min(layout.totalRows - 1, Math.max(0, rel))
       useEditorStore.getState().setSelection({
         kind: 'rows',
@@ -219,25 +199,22 @@ export function useEditor(
     const drag = dragRef.current
     if (!drag || drag.startedOnNote) return
 
-    const el = scrollRef.current
-    if (!el) return
-
-    const rect = el.getBoundingClientRect()
-    const py = e.clientY - rect.top + scrollOffset() - cursorY
+    const pt = toChartPoint(e.clientX, e.clientY)
+    if (!pt) return
 
     const startLayout = blockLayouts.find(l => l.block.id === drag.blockId)
     if (!startLayout) return
 
     const startAbsY = startLayout.startY + drag.startRow * startLayout.rh
 
-    if (py < startAbsY) {
+    if (pt.py < startAbsY) {
       dragRef.current = { ...drag, draggedUp: true }
       setPreview(null)
       return
     }
 
     // Конец холда привязываем к ближайшей линии (без мёртвых зон).
-    const snap = snapRow(py, blockLayouts)
+    const snap = snapRow(pt.py, blockLayouts)
     if (!snap) {
       dragRef.current = { ...drag, draggedUp: true }
       setPreview(null)
@@ -256,7 +233,7 @@ export function useEditor(
     } else {
       setPreview(null)
     }
-  }, [blockLayouts, scrollRef, scrollOffset, cursorY, chartY, snapshotTapPreview])
+  }, [blockLayouts, toChartPoint, snapshotTapPreview])
 
   // Коммит серии тапов одним updateChart: существующие ноты в закрашенных
   // ячейках колонки замещаются, задетые холды удаляются (их части в этом блоке).
@@ -270,8 +247,7 @@ export function useEditor(
       if (!set || set.size === 0) return b
       const filtered = b.notes.filter(n => {
         if (n.col !== s.col) return true
-        const end = n.type === 'hold' ? (n.endRow ?? n.row) : n.row
-        for (let r = n.row; r <= end; r++) if (set.has(r)) return false
+        for (let r = n.row; r <= noteEnd(n); r++) if (set.has(r)) return false
         return true
       })
       const taps: Note[] = [...set].sort((a, b2) => a - b2).map(row => ({ row, col: s.col, type: 'tap' }))
@@ -296,12 +272,8 @@ export function useEditor(
     // Delete: click on existing note without moving
     if (startedOnNote && endBlockId === blockId && endRow === startRow) {
       const clickedBlockIdx = chart.blocks.findIndex(b => b.id === blockId)
-      const clickedNote = startBlock.notes.find(n => {
-        if (n.col !== col) return false
-        if (n.type === 'tap') return n.row === startRow
-        const end = n.endRow ?? n.row
-        return n.row <= startRow && startRow <= end
-      })
+      const clickedNote = startBlock.notes.find(n =>
+        n.col === col && n.row <= startRow && startRow <= noteEnd(n))
 
       if (clickedNote?.type === 'hold' && (clickedNote.continues || clickedNote.continued)) {
         // Cross-block hold: delete all parts in the chain
@@ -314,14 +286,9 @@ export function useEditor(
         })
         updateChart(activeTabId, { ...chart, blocks })
       } else {
-        const notes = startBlock.notes.filter(n => {
-          if (n.col !== col) return true
-          if (n.type === 'tap') return n.row !== startRow
-          const end = n.endRow ?? n.row
-          return !(n.row <= startRow && startRow <= end)
-        })
+        const notes = clearColumnSpan(startBlock.notes, col, startRow, startRow)
         const blocks = chart.blocks.map(b => b.id === blockId ? { ...b, notes } : b)
-        updateChart(activeTabId, { ...chart, blocks })
+        updateChart(activeTabId, { ...chart, blocks: sanitizeHoldFlags(blocks) })
       }
       return
     }
@@ -333,18 +300,14 @@ export function useEditor(
     const endBlockIdx = chart.blocks.findIndex(b => b.id === endBlockId)
 
     if (startBlockIdx === endBlockIdx) {
-      // Single block
-      const filtered = startBlock.notes.filter(n => {
-        if (n.col !== col) return true
-        if (n.type === 'tap') return n.row < startRow || n.row > endRow
-        const end = n.endRow ?? n.row
-        return end < startRow || n.row > endRow
-      })
+      // Single block. Замещённая нота могла быть частью кросс-блочной цепочки —
+      // sanitizeHoldFlags снимает висячие флаги у соседей.
+      const filtered = clearColumnSpan(startBlock.notes, col, startRow, endRow)
       const newNote: Note = endRow === startRow
         ? { row: startRow, col, type: 'tap' }
         : { row: startRow, col, type: 'hold', endRow }
       const blocks = chart.blocks.map(b => b.id === blockId ? { ...b, notes: [...filtered, newNote] } : b)
-      updateChart(activeTabId, { ...chart, blocks })
+      updateChart(activeTabId, { ...chart, blocks: sanitizeHoldFlags(blocks) })
       return
     }
 
@@ -358,12 +321,7 @@ export function useEditor(
       const clearFrom = isFirst ? startRow : 0
       const clearTo = isLast ? endRow : totalRows - 1
 
-      const filtered = b.notes.filter(n => {
-        if (n.col !== col) return true
-        if (n.type === 'tap') return n.row < clearFrom || n.row > clearTo
-        const end = n.endRow ?? n.row
-        return end < clearFrom || n.row > clearTo
-      })
+      const filtered = clearColumnSpan(b.notes, col, clearFrom, clearTo)
 
       let newNote: Note
       if (isFirst) {
@@ -377,7 +335,8 @@ export function useEditor(
       return { ...b, notes: [...filtered, newNote] }
     })
 
-    updateChart(activeTabId, { ...chart, blocks: newBlocks })
+    // Расчистка колонки могла задеть чужие цепочки за пределами нового холда.
+    updateChart(activeTabId, { ...chart, blocks: sanitizeHoldFlags(newBlocks) })
   }, [activeTab, activeTabId, updateChart, blockLayouts])
 
   const onPointerUp = useCallback((_e: React.PointerEvent) => {

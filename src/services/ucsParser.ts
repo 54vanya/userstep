@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid'
 import type { Block, Chart, ChartMode, Note } from '@/types/chart'
+import { blockCells } from '@/utils/geometry'
 
 interface RawBlock {
   bpm: number
@@ -42,13 +43,18 @@ function parseRawBlocks(lines: string[]): { mode: ChartMode; rawBlocks: RawBlock
     i++
     while (i < lines.length && lines[i].startsWith(':')) {
       const meta = lines[i]
-      if (meta.startsWith(':Delay=')) delay = parseInt(meta.slice(7).trim(), 10)
+      // Delay бывает дробным (мс с долями) — parseFloat, не parseInt.
+      if (meta.startsWith(':Delay=')) delay = parseFloat(meta.slice(7).trim())
       else if (meta.startsWith(':Beat=')) beat = parseInt(meta.slice(6).trim(), 10)
       else if (meta.startsWith(':Split=')) split = parseInt(meta.slice(7).trim(), 10)
       i++
     }
 
+    // Битые заголовки не должны давать NaN/деление на ноль в геометрии и тайминге.
     if (isNaN(bpm) || bpm <= 0) bpm = 120
+    if (!Number.isFinite(delay)) delay = 0
+    if (!Number.isFinite(beat) || beat <= 0) beat = 4
+    if (!Number.isFinite(split) || split <= 0) split = 4
 
     const rows: string[] = []
     while (i < lines.length && !lines[i].startsWith(':')) {
@@ -120,8 +126,7 @@ export function parseUcs(text: string): Chart {
     // measures дробное: rowCount/(beat*split). В гиммик-чартах (см. CS241) большинство
     // блоков — неполные такты (< 1 measure). rowCount хранится как авторитетное целое
     // число строк, measures — точная дробь для отображения/правки.
-    const cells = rb.beat * rb.split
-    const measures = cells > 0 ? rowCount / cells : 1
+    const measures = rowCount / blockCells(rb.beat, rb.split)
     return {
       id: uuidv4(),
       bpm: rb.bpm,

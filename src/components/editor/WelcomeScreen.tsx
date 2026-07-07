@@ -1,65 +1,16 @@
 import { useTabsStore } from '@/store/tabsStore'
-import { useEditorStore } from '@/store/editorStore'
-import { audioEngine } from '@/services/audioEngine'
-import { parseUcs } from '@/services/ucsParser'
+import { pickFile, importUcsIntoTab, openPiuIntoTab } from '@/services/fileActions'
 
 interface Props {
   tabId: string
 }
 
 export function WelcomeScreen({ tabId }: Props) {
-  const { importChartIntoTab, markBlank } = useTabsStore()
-  const { setCurrentTime } = useEditorStore()
+  const { markBlank } = useTabsStore()
 
-  const handleImportUcs = () => {
-    const input = document.createElement('input')
-    input.type = 'file'
-    input.accept = '.ucs'
-    input.onchange = () => {
-      const file = input.files?.[0]
-      if (!file) return
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        try {
-          const chart = parseUcs(e.target?.result as string)
-          const label = file.name.replace(/\.ucs$/i, '')
-          chart.meta.title = label
-          importChartIntoTab(tabId, chart, label)
-        } catch {
-          alert('Failed to parse UCS file')
-        }
-      }
-      reader.readAsText(file)
-    }
-    input.click()
-  }
-
-  const handleImportPiu = () => {
-    const input = document.createElement('input')
-    input.type = 'file'
-    input.accept = '.json,.piu.json'
-    input.onchange = () => {
-      const file = input.files?.[0]
-      if (!file) return
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        try {
-          const chart = JSON.parse(e.target?.result as string)
-          const label = chart.meta?.title || file.name.replace(/\.piu\.json$|\.json$/i, '')
-          const s = chart.editorSettings
-          importChartIntoTab(tabId, chart, label, s)
-          if (s) {
-            audioEngine.setPlaybackRate(s.playbackRate)
-            setCurrentTime(s.currentTime)
-          }
-        } catch {
-          alert('Failed to parse .piu.json file')
-        }
-      }
-      reader.readAsText(file)
-    }
-    input.click()
-  }
+  // Разбор/валидация файлов централизованы в fileActions — здесь только выбор файла.
+  const handleImportUcs = () => pickFile('.ucs', f => importUcsIntoTab(tabId, f))
+  const handleImportPiu = () => pickFile('.json,.piu.json', f => openPiuIntoTab(tabId, f))
 
   const handleCreateNew = () => {
     markBlank(tabId, false)

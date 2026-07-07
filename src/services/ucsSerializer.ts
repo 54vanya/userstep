@@ -1,5 +1,7 @@
 import type { Block, Chart, Note } from '@/types/chart'
+import { chartCols } from '@/types/chart'
 import { blockRowCount } from '@/utils/geometry'
+import { noteEnd } from '@/utils/holds'
 
 function notesToRows(notes: Note[], totalRows: number, cols: number): string[] {
   const rows: string[][] = Array.from({ length: totalRows }, () => Array(cols).fill('.'))
@@ -10,13 +12,14 @@ function notesToRows(notes: Note[], totalRows: number, cols: number): string[] {
         rows[note.row][note.col] = 'X'
       }
     } else if (note.type === 'hold') {
-      const endRow = note.endRow ?? note.row
+      const endRow = noteEnd(note)
       const col = note.col
       if (col >= cols) continue
 
       if (note.continued && endRow === note.row) {
-        // Continuation that ends on the very first row: write W
-        if (note.row < totalRows) rows[note.row][col] = 'W'
+        // Continuation that ends on the very first row: W closes the chain,
+        // H keeps it going (1-row block in the middle of a cross-block hold)
+        if (note.row < totalRows) rows[note.row][col] = note.continues ? 'H' : 'W'
       } else {
         const startChar = note.continued ? 'H' : 'M'
         if (note.row < totalRows) rows[note.row][col] = startChar
@@ -31,10 +34,10 @@ function notesToRows(notes: Note[], totalRows: number, cols: number): string[] {
   return rows.map(r => r.join(''))
 }
 
-function serializeBlock(block: Block, cols: number, isFirst: boolean): string {
+function serializeBlock(block: Block, cols: number): string {
   const lines: string[] = []
   lines.push(`:BPM=${block.bpm}`)
-  lines.push(`:Delay=${isFirst ? block.delay : 0}`)
+  lines.push(`:Delay=${block.delay}`)
   lines.push(`:Beat=${block.beat}`)
   lines.push(`:Split=${block.split}`)
 
@@ -46,13 +49,13 @@ function serializeBlock(block: Block, cols: number, isFirst: boolean): string {
 }
 
 export function serializeToUcs(chart: Chart): string {
-  const cols = chart.chartType === 'Double' ? 10 : 5
+  const cols = chartCols(chart)
   const header = [
     ':Format=1',
     `:Mode=${chart.chartType}`,
   ]
 
-  const blockLines = chart.blocks.map((b, i) => serializeBlock(b, cols, i === 0))
+  const blockLines = chart.blocks.map(b => serializeBlock(b, cols))
 
   return [...header, ...blockLines].join('\n') + '\n'
 }

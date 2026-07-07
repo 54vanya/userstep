@@ -1,73 +1,38 @@
-# React + TypeScript + Vite
+# PIU StepMaker
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+PWA-редактор степчартов для Pump It Up — аналог UCSLite / StepEdit Lite,
+работающий офлайн в браузере или как установленное приложение.
 
-Currently, two official plugins are available:
+## Возможности
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- Импорт/экспорт `.ucs` (включая гиммик-чарты: дробный BPM, Split до 128,
+  кросс-блочные длинные ноты) и собственный формат `.piu.json` с настройками
+  редактора (масштаб, скорость, позиция).
+- Вкладки: несколько чартов одновременно, каждый со своим аудио; сессия
+  (вкладки, позиции) переживает перезагрузку, аудио хранится в IndexedDB.
+- Редактирование: клик = tap, drag = hold (в том числе через границы блоков),
+  Alt+drag = серия тапов, выделение с копированием/вставкой/трансформациями
+  (flip X/Y/mirror), операции над блоками (split/merge/delete below/resize).
+- Live-запись нот во время воспроизведения; две раскладки клавиш —
+  UCS Lite (`Z Q S E C` + NumPad) и StepMania (цифры `1…0`).
+- Синхронизированное воспроизведение с плавной прокруткой (несколько режимов
+  рендера), Rush 0.2–4×, hit-звуки, метроном, счётчик нот.
+- Undo/redo (50 шагов), полная клавиатурная навигация — см.
+  [docs/KEYBOARD.md](docs/KEYBOARD.md) или File → Keyboard shortcuts в приложении.
+- Drag&drop файлов в окно; в установленном PWA `.ucs`/`.piu.json` открываются
+  прямо из ОС.
 
-## React Compiler
+## Разработка
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+pnpm install
+pnpm dev        # dev-сервер на :5173
+pnpm build      # tsc + production-сборка
+pnpm test       # юнит-тесты (vitest)
+pnpm e2e        # e2e-тесты (Playwright, сам поднимает dev-сервер)
+pnpm lint
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+Стек: Vite, React 18, TypeScript, Zustand (+ zundo), Tailwind + shadcn/ui,
+Web Audio API, vite-plugin-pwa. Архитектура и ключевые решения — в
+[CLAUDE.md](CLAUDE.md), планы на будущее — в [TODO.md](TODO.md).

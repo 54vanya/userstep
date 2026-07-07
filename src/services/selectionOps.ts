@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid'
 import type { Block, Chart, Note } from '@/types/chart'
 import type { Selection } from '@/store/editorStore'
 import { blockRowCount } from '@/utils/geometry'
-import { collectHoldChain, sanitizeHoldFlags } from '@/utils/holds'
+import { collectHoldChain, noteEnd, sanitizeHoldFlags } from '@/utils/holds'
 
 // ── Клипборд (внутренний, живёт в памяти приложения) ────────────────────────
 
@@ -31,10 +31,6 @@ export function clearClipboard(): void {
 }
 
 // ── Хелперы ──────────────────────────────────────────────────────────────────
-
-function noteEnd(n: Note): number {
-  return n.type === 'hold' ? (n.endRow ?? n.row) : n.row
-}
 
 function spanIntersects(n: Note, from: number, to: number): boolean {
   return noteEnd(n) >= from && n.row <= to
@@ -179,7 +175,7 @@ export function pasteClipboard(
       pasted.push({ row, col, type: 'tap' })
       continue
     }
-    const end = Math.min(total - 1, target.row + (n.endRow ?? n.row))
+    const end = Math.min(total - 1, target.row + noteEnd(n))
     pasted.push(end === row
       ? { row, col, type: 'tap' }
       : { row, col, type: 'hold', endRow: end })

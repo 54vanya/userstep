@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { temporal } from 'zundo'
+import { del as idbDel } from 'idb-keyval'
 import { v4 as uuidv4 } from 'uuid'
 import type { Chart, Tab } from '@/types/chart'
 import { saveSession, loadSession } from '@/services/sessionStorage'
@@ -119,13 +120,15 @@ export const useTabsStore = create<TabsState>()(
         let newActiveId = state.activeTabId
         if (state.activeTabId === tabId) {
           newActiveId = newTabs[Math.max(0, idx - 1)]?.id ?? newTabs[0]?.id ?? null
-          // Активная вкладка закрыта — грузим время новой активной (старую не сохраняем).
-          const ed = useEditorStore.getState()
-          if (audioEngine.isPlaying()) audioEngine.pause()
-          ed.setPlaying(false)
-          ed.setCurrentTime(newActiveId ? tabTimes.get(newActiveId) ?? 0 : 0)
+          // Активная вкладка закрыта — грузим время новой активной; prevId=null:
+          // время закрываемой вкладки не сохраняем (её запись сейчас удалится).
+          swapActiveTime(null, newActiveId)
         }
         tabTimes.delete(tabId)
+        // Иначе многомегабайтные аудиоблобы закрытых вкладок копятся в IndexedDB
+        // бессрочно. Undo закрытия вернёт blob из снэпшота (в памяти), но повторное
+        // сохранение в IDB произойдёт только при новой загрузке аудио.
+        idbDel(`audio:${tabId}`).catch(() => {})
         set({ tabs: newTabs, activeTabId: newActiveId })
       },
 
@@ -219,6 +222,12 @@ export const useTabsStore = create<TabsState>()(
     {
       limit: 50,
       partialize: (state) => ({ tabs: state.tabs }),
+      // В историю undo попадают только правки чартов и состав вкладок. Без этого
+      // каждый set() (тик слайдера scale, markDirty, переключение вкладки) пушил бы
+      // снэпшот и вымывал 50-шаговую историю реальных правок.
+      equality: (past, current) =>
+        past.tabs.length === current.tabs.length &&
+        past.tabs.every((t, i) => t.id === current.tabs[i].id && t.chart === current.tabs[i].chart),
     }
   )
 )

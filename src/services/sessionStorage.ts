@@ -1,4 +1,5 @@
 import type { Tab } from '@/types/chart'
+import { isValidChart } from '@/utils/chartGuard'
 
 const SESSION_KEY = 'piu-session'
 
@@ -33,7 +34,13 @@ export function loadSession(): PersistedSession | null {
     if (!raw) return null
     const parsed = JSON.parse(raw) as PersistedSession
     if (!Array.isArray(parsed?.tabs)) return null
-    return parsed
+    // Битый таб в сессии (например, сохранённый до валидации импорта) ронял бы
+    // приложение при каждом запуске — отбрасываем только его, не всю сессию.
+    const tabs = parsed.tabs.filter(t => t && typeof t.id === 'string' && isValidChart(t.chart))
+    const activeTabId = tabs.some(t => t.id === parsed.activeTabId)
+      ? parsed.activeTabId
+      : tabs[0]?.id ?? null
+    return { ...parsed, tabs, activeTabId }
   } catch {
     return null
   }

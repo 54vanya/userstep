@@ -1,6 +1,7 @@
 import { memo } from 'react'
 import { useEditorStore } from '@/store/editorStore'
 import { rhythmColor, RHYTHM_YELLOW } from '@/utils/rhythmColors'
+import { noteEnd } from '@/utils/holds'
 import type { Block, Note } from '@/types/chart'
 
 const DIRECTIONS = ['DownLeft', 'UpLeft', 'Center', 'UpRight', 'DownRight']
@@ -81,7 +82,7 @@ function ImageSprite({ note, rh, cw, totalRows, skin, ghost, color }: { note: No
     )
   }
 
-  const endRow = note.endRow ?? note.row
+  const endRow = noteEnd(note)
   const bodyTop = note.row * rh
   // Хвостовой кэп центрирован на линии хвоста (endRow*rh), как нота на хит-линии.
   // Тело тянется до ВЕРХНЕЙ грани кэпа (endRow*rh - cw/2), иначе оно просвечивало бы
@@ -127,7 +128,7 @@ function BlocksSprite({ note, rh, cw, totalRows, ghost, color }: { note: Note; r
     )
   }
 
-  const endRow = note.endRow ?? note.row
+  const endRow = noteEnd(note)
   // Холд как объединение ячеек, центрированных на линиях: от верхней грани стартовой
   // ячейки (row*rh - rh/2) до нижней грани конечной (endRow*rh + rh/2). Кросс-блочные
   // края (continued/continues) — впритык к границе блока, чтобы шов был бесшовным.

@@ -12,6 +12,9 @@ class AudioEngine {
   private _volume = 1.0
   private endListeners: Array<() => void> = []
   private loadListeners: Array<() => void> = []
+  // Поколение загрузки: параллельные decodeAudioData завершаются в произвольном
+  // порядке (быстрое переключение вкладок) — буфер выставляет только последний вызов.
+  private loadGen = 0
 
   private getCtx(): AudioContext {
     if (!this.ctx) this.ctx = new AudioContext()
@@ -29,15 +32,22 @@ class AudioEngine {
   }
 
   async loadBlob(blob: Blob): Promise<void> {
+    const gen = ++this.loadGen
     const ctx = this.getCtx()
     const arrayBuffer = await blob.arrayBuffer()
-    this.buffer = await ctx.decodeAudioData(arrayBuffer)
+    const buffer = await ctx.decodeAudioData(arrayBuffer)
+    if (gen !== this.loadGen) return // за время декодирования запросили другой файл
+    this.buffer = buffer
     this.loadListeners.forEach(cb => cb())
   }
 
   play(fromMs: number): void {
     if (!this.buffer) return
     const ctx = this.getCtx()
+    // Контекст, созданный вне пользовательского жеста (загрузка аудио при
+    // восстановлении сессии), браузер держит в suspended — без resume() звука нет
+    // и ctx.currentTime заморожен. play() всегда вызывается из жеста, resume законен.
+    if (ctx.state === 'suspended') void ctx.resume()
     this._stopSource()
     this.source = ctx.createBufferSource()
     this.source.buffer = this.buffer
@@ -49,6 +59,9 @@ class AudioEngine {
     this._isPlaying = true
     this.source.onended = () => {
       if (this._isPlaying) {
+        // Фиксируем позицию ДО сброса флага: иначе getCurrentMs() вернёт offsetMs
+        // момента старта и курсор прыгнет назад к точке, где нажали Play.
+        this.offsetMs = this.getCurrentMs()
         this._isPlaying = false
         this.endListeners.forEach(cb => cb())
       }

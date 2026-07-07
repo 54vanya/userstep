@@ -6,40 +6,13 @@ import {
   deleteBelow as deleteBelowOp,
 } from '@/utils/blockOps'
 import type { Note, Block } from '@/types/chart'
-
-function noteEnd(n: Note): number {
-  return n.type === 'hold' ? (n.endRow ?? n.row) : n.row
-}
+import { blockCells } from '@/utils/geometry'
+import { noteEnd } from '@/utils/holds'
 
 export function useChart() {
   const { tabs, activeTabId, updateChart } = useTabsStore()
   const activeTab = tabs.find(t => t.id === activeTabId)
   const chart = activeTab?.chart ?? null
-
-  const addNote = (blockId: string, note: Note) => {
-    if (!chart || !activeTabId) return
-    const blocks = chart.blocks.map(b => {
-      if (b.id !== blockId) return b
-      const filtered = b.notes.filter(n => !(n.row === note.row && n.col === note.col))
-      return { ...b, notes: [...filtered, note] }
-    })
-    updateChart(activeTabId, { ...chart, blocks })
-  }
-
-  const removeNote = (blockId: string, row: number, col: number) => {
-    if (!chart || !activeTabId) return
-    const blocks = chart.blocks.map(b => {
-      if (b.id !== blockId) return b
-      const notes = b.notes.filter(n => {
-        if (n.col !== col) return true
-        if (n.type === 'tap') return n.row !== row
-        const endRow = n.endRow ?? n.row
-        return !(n.row <= row && row <= endRow)
-      })
-      return { ...b, notes }
-    })
-    updateChart(activeTabId, { ...chart, blocks })
-  }
 
   const addBlock = () => {
     if (!chart || !activeTabId) return
@@ -132,7 +105,7 @@ export function useChart() {
         }
         merged.notes = rescaled
       }
-      const cells = Math.max(1, merged.beat * merged.split)
+      const cells = blockCells(merged.beat, merged.split)
       // rowCount — авторитетное целое число строк. Если задан явно (правка «Rows»),
       // берём его и пересчитываем measures под него. Иначе считаем из beat*split*measures
       // (measures дробное → округляем), сохраняя measures как есть, чтобы дробный ввод
@@ -145,7 +118,7 @@ export function useChart() {
       const notes = merged.notes
         .map(n =>
           n.type === 'hold'
-            ? { ...n, endRow: Math.min(n.endRow ?? n.row, rowCount - 1) }
+            ? { ...n, endRow: Math.min(noteEnd(n), rowCount - 1) }
             : n
         )
         .filter(n => n.row < rowCount)
@@ -154,5 +127,5 @@ export function useChart() {
     updateChart(activeTabId, { ...chart, blocks })
   }
 
-  return { chart, addNote, removeNote, addBlock, insertBlockAfter, duplicateBlock, deleteBlock, updateBlock, splitBlockAt, mergeWithNext, deleteBelow }
+  return { chart, addBlock, insertBlockAfter, duplicateBlock, deleteBlock, updateBlock, splitBlockAt, mergeWithNext, deleteBelow }
 }

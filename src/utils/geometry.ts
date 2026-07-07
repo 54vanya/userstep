@@ -27,12 +27,9 @@ export function blockPixelHeight(block: Block, scale: number): number {
   return blockRowCount(block) * rowHeight(scale, block.split)
 }
 
-export function pixelToRow(py: number, scale: number, split: number): number {
-  return Math.floor(py / rowHeight(scale, split))
-}
-
-export function pixelToCol(px: number): number {
-  return Math.floor(px / COLUMN_WIDTH)
+// Ячеек (строк) в одном такте блока; guard от beat/split=0 в старых данных.
+export function blockCells(beat: number, split: number): number {
+  return Math.max(1, beat * split)
 }
 
 // Адаптивная полу-высота зоны клика для линий конкретного блока: квадрат cw/2 (cw —

@@ -17,6 +17,12 @@ const PLAYBACK_MODES: PlaybackMode[] = ['snap', 'smooth', 'framelock', 'raw']
 export type RailColoring = 'none' | 'mono' | 'color'
 const RAIL_COLORINGS: RailColoring[] = ['none', 'mono', 'color']
 
+// Раскладка клавиш live-записи: ucs — как StepEdit Lite (Z Q S E C + NumPad
+// 1 7 5 9 3, физически повторяет крест панели), stepmania — верхний ряд цифр
+// 1…9, 0 → колонки 0–9 слева направо.
+export type LiveKeyLayout = 'ucs' | 'stepmania'
+const LIVE_KEY_LAYOUTS: LiveKeyLayout[] = ['ucs', 'stepmania']
+
 // Тинт через одну [чётный, нечётный]. Полупрозрачные — корректны на светлой и тёмной
 // теме; применяются и к рейлу, и к фону поля редактора. undefined = базовый фон.
 const SECTION_TINTS: Record<RailColoring, [string | undefined, string | undefined]> = {
@@ -44,6 +50,7 @@ export interface ViewSettings {
   fieldZoom: number
   showNoteCounter: boolean
   railColoring: RailColoring
+  liveKeyLayout: LiveKeyLayout
   rhythmColoring: boolean
   hitSounds: boolean
   metronome: boolean
@@ -59,6 +66,7 @@ const DEFAULTS: ViewSettings = {
   fieldZoom: 100,
   showNoteCounter: false,
   railColoring: 'none',
+  liveKeyLayout: 'ucs',
   rhythmColoring: false,
   hitSounds: false,
   metronome: false,
@@ -95,6 +103,9 @@ export function loadViewSettings(): ViewSettings {
       railColoring: RAIL_COLORINGS.includes(parsed.railColoring as RailColoring)
         ? (parsed.railColoring as RailColoring)
         : DEFAULTS.railColoring,
+      liveKeyLayout: LIVE_KEY_LAYOUTS.includes(parsed.liveKeyLayout as LiveKeyLayout)
+        ? (parsed.liveKeyLayout as LiveKeyLayout)
+        : DEFAULTS.liveKeyLayout,
       rhythmColoring:
         typeof parsed.rhythmColoring === 'boolean' ? parsed.rhythmColoring : DEFAULTS.rhythmColoring,
       hitSounds: typeof parsed.hitSounds === 'boolean' ? parsed.hitSounds : DEFAULTS.hitSounds,

@@ -3,12 +3,8 @@
 // неприменима. Обёртки с updateChart — в hooks/useChart.ts.
 import { v4 as uuidv4 } from 'uuid'
 import type { Block, Chart, Note } from '@/types/chart'
-import { blockRowCount } from './geometry'
-import { sanitizeHoldFlags } from './holds'
-
-function noteEnd(n: Note): number {
-  return n.type === 'hold' ? (n.endRow ?? n.row) : n.row
-}
+import { blockCells, blockRowCount } from './geometry'
+import { noteEnd, sanitizeHoldFlags } from './holds'
 
 // Разрез блока на два по строке row (row уходит во второй блок). Холды через
 // разрез становятся кросс-блочной цепочкой (continues/continued) — та же
@@ -19,7 +15,7 @@ export function splitBlockAt(chart: Chart, blockId: string, row: number): Chart 
   if (!b) return null
   const total = blockRowCount(b)
   if (row <= 0 || row >= total) return null
-  const cells = Math.max(1, b.beat * b.split)
+  const cells = blockCells(b.beat, b.split)
 
   const notesA: Note[] = []
   const notesB: Note[] = []
@@ -90,10 +86,14 @@ export function mergeWithNext(chart: Chart, blockId: string): Chart | null {
     if (consumed.has(n)) continue
     const nn: Note = { ...n, row: clamp(conv(n.row)) }
     if (n.type === 'hold') nn.endRow = clamp(conv(noteEnd(n)))
-    merged.push(nn)
+    // При переходе на более грубый split округление сталкивает соседние ноты
+    // на одну строку — столкнувшиеся схлопываем (как adjust beat-split в updateBlock).
+    const collides = merged.some(k =>
+      k.col === nn.col && noteEnd(k) >= nn.row && k.row <= noteEnd(nn))
+    if (!collides) merged.push(nn)
   }
 
-  const cells = Math.max(1, a.beat * a.split)
+  const cells = blockCells(a.beat, a.split)
   const mergedBlock: Block = { ...a, rowCount: total, measures: total / cells, notes: merged }
   const blocks = sanitizeHoldFlags([
     ...chart.blocks.slice(0, idx),
@@ -111,7 +111,7 @@ export function deleteBelow(chart: Chart, blockId: string, row: number): Chart |
   if (!b) return null
   const total = blockRowCount(b)
   if (row < 1 || row >= total) return null
-  const cells = Math.max(1, b.beat * b.split)
+  const cells = blockCells(b.beat, b.split)
 
   const notes: Note[] = []
   for (const n of b.notes) {

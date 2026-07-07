@@ -3,6 +3,7 @@ import { useTabsStore } from '@/store/tabsStore'
 import { useEditorStore } from '@/store/editorStore'
 import {
   rowHeight,
+  blockCells,
   blockPixelHeight,
   blockRowCount,
   BLOCK_DIVIDER_HEIGHT,
@@ -22,7 +23,7 @@ import { usePlayback } from '@/hooks/usePlayback'
 import { computeBlockOffsets, msToScrollY, scrollYToMs, formatMs } from '@/utils/timing'
 import { ColumnHeaders } from './ColumnHeaders'
 import { BlockRail } from './BlockRail'
-import { BlockSettingsPopup } from './BlockSettingsPopup'
+import { BlockSettingsPopup, BLOCK_POPUP_WIDTH } from './BlockSettingsPopup'
 import { BlockLayer } from './BlockLayer'
 import { GridBlock } from './GridLayer'
 import { Cursor } from './Cursor'
@@ -30,6 +31,7 @@ import { NoteCounterOverlay } from './NoteCounterOverlay'
 import { computeHitTimes } from '@/utils/noteCount'
 import { sectionTint } from '@/utils/viewSettings'
 import type { Note } from '@/types/chart'
+import { chartCols } from '@/types/chart'
 
 export function ChartGrid() {
   const { tabs, activeTabId } = useTabsStore()
@@ -66,7 +68,7 @@ export function ChartGrid() {
 
   if (!activeTab) return null
 
-  const cols = activeTab.chart.chartType === 'Double' ? 10 : 5
+  const cols = chartCols(activeTab.chart)
 
   return (
     <ChartGridInner
@@ -98,7 +100,18 @@ function ChartGridInner({
   activeTabId,
 }: InnerProps) {
   const { tabs } = useTabsStore()
-  const { isPlaying, currentTime, setCurrentTime, showColumnDividers, showRowLines, fieldZoom, showNoteCounter, railColoring, selection, setSelection } = useEditorStore()
+  // Подписки — по-полевые: подписка на весь стор ререндерила бы самый тяжёлый
+  // компонент дерева на каждый тик currentTime при скролле/скрабе. currentTime
+  // в рендере не нужен — обработчики читают его через getState().
+  const isPlaying = useEditorStore(s => s.isPlaying)
+  const setCurrentTime = useEditorStore(s => s.setCurrentTime)
+  const showColumnDividers = useEditorStore(s => s.showColumnDividers)
+  const showRowLines = useEditorStore(s => s.showRowLines)
+  const fieldZoom = useEditorStore(s => s.fieldZoom)
+  const showNoteCounter = useEditorStore(s => s.showNoteCounter)
+  const railColoring = useEditorStore(s => s.railColoring)
+  const selection = useEditorStore(s => s.selection)
+  const setSelection = useEditorStore(s => s.setSelection)
   // Зум поля: ноты/колонки и хит-линия растут пропорционально (per-tab scale при этом
   // отвечает лишь за расстояние между строками).
   const cw = (COLUMN_WIDTH * fieldZoom) / 100
@@ -149,10 +162,9 @@ function ChartGridInner({
   }
   const onResizeMove = (e: React.PointerEvent) => {
     const r = resizeRef.current
-    const el = scrollRef.current
-    if (!r || !el) return
-    const py = e.clientY - el.getBoundingClientRect().top + el.scrollTop - cursorY
-    const rows = Math.max(1, Math.round((py - r.startY) / r.rh))
+    const pt = toChartPoint(e.clientX, e.clientY)
+    if (!r || !pt) return
+    const rows = Math.max(1, Math.round((pt.py - r.startY) / r.rh))
     setResizeGhost({ y: r.startY + rows * r.rh, rows })
   }
   const onResizeUp = () => {
@@ -181,14 +193,18 @@ function ChartGridInner({
     const layout = blockLayouts.find(l => l.block.id === blockId)
     if (!layout) return
     const blockScreenTop = rect.top + cursorY + layout.startY - scrollEl.scrollTop
-    const POPUP_W = 240
     const railRight = rect.left + cols * cw + RAIL_WIDTH - scrollEl.scrollLeft
     let left = railRight + 8
-    if (left + POPUP_W > window.innerWidth - 8) {
-      left = railRight - POPUP_W - 8
+    if (left + BLOCK_POPUP_WIDTH > window.innerWidth - 8) {
+      left = railRight - BLOCK_POPUP_WIDTH - 8
     }
     setPopupPos({ top: blockScreenTop, left: Math.max(8, left), editorTop: rect.top, editorBottom: rect.bottom })
   }, [openBlockId, blockLayouts, scrollRef, cols, cw, cursorY])
+
+  // Оффсеты блоков — один раз на изменение чарта/масштаба: их пересчёт на каждый
+  // mousemove/scroll аллоцировал массив по всем блокам ради одного элемента.
+  const blocks = useMemo(() => blockLayouts.map(l => l.block), [blockLayouts])
+  const blockOffsets = useMemo(() => computeBlockOffsets(blocks), [blocks])
 
   // Слой, который во время playback двигается transform'ом (вместо scrollTop).
   const contentRef = useRef<HTMLDivElement>(null)
@@ -212,13 +228,12 @@ function ChartGridInner({
     const newId = activeTab?.chart.id
     if (prevId === newId) return
     prevChartIdRef.current = newId
-    const offsets = computeBlockOffsets(blockLayouts.map(l => l.block))
-    const y = msToScrollY(currentTime, offsets, blockLayouts)
+    const y = msToScrollY(useEditorStore.getState().currentTime, blockOffsets, blockLayouts)
     scrollRef.current.scrollTop = y
     // Чтобы возможный cleanup playback-цикла не вернул scrollTop на позицию
     // прошлой вкладки — синхронизируем якорь.
     playbackYRef.current = y
-  }, [activeTab?.chart.id, activeTabId, blockLayouts])
+  }, [activeTab?.chart.id, activeTabId, blockLayouts, blockOffsets])
 
   const isPlayingRef = useRef(isPlaying)
   useEffect(() => { isPlayingRef.current = isPlaying }, [isPlaying])
@@ -229,6 +244,19 @@ function ChartGridInner({
     () => (isPlayingRef.current ? playbackYRef.current : scrollRef.current?.scrollTop ?? 0),
     [scrollRef],
   )
+
+  // ЕДИНСТВЕННАЯ формула экран → координаты чарта (px — внутри поля, py — по
+  // вертикали с учётом курсора и playback-позиции). Все хит-тесты, выделение,
+  // статус-бар и resize обязаны ходить через неё.
+  const toChartPoint = useCallback((clientX: number, clientY: number) => {
+    const el = scrollRef.current
+    if (!el) return null
+    const rect = el.getBoundingClientRect()
+    return {
+      px: clientX - rect.left,
+      py: clientY - rect.top + scrollOffset() - cursorY,
+    }
+  }, [scrollRef, scrollOffset, cursorY])
 
   // Ctrl+колесо — зум поля (как в StepEdit Lite). Нужен нативный non-passive
   // listener: React вешает onWheel пассивно, preventDefault не сработал бы и
@@ -291,12 +319,11 @@ function ChartGridInner({
       el.scrollTop = y
       // currentTime синхронно: scroll-событие придёт лишь на следующем кадре, а
       // операции «от плейхеда» (вставка, Ctrl+A) могут случиться раньше него.
-      const offsets = computeBlockOffsets(blockLayouts.map(l => l.block))
-      useEditorStore.getState().setCurrentTime(scrollYToMs(y, offsets, blockLayouts))
+      useEditorStore.getState().setCurrentTime(scrollYToMs(y, blockOffsets, blockLayouts))
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [scrollRef, blockLayouts])
+  }, [scrollRef, blockLayouts, blockOffsets])
 
   const prevScaleRef = useRef(scale)
   useLayoutEffect(() => {
@@ -313,24 +340,22 @@ function ChartGridInner({
   const statusRef = useRef<HTMLDivElement>(null)
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    const el = scrollRef.current
     const hl = highlightRef.current
-    if (!el || !hl) return
-    const rect = el.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const chartY = e.clientY - rect.top + scrollOffset() - cursorY
-    const col = Math.floor(x / cw)
+    const pt = toChartPoint(e.clientX, e.clientY)
+    if (!pt || !hl) return
+    const col = Math.floor(pt.px / cw)
 
     // Статус-бар: ближайшая линия без мёртвых зон (snapRow), независимо от колонки.
     const status = statusRef.current
     if (status) {
-      const snap = snapRow(chartY, blockLayouts)
+      const snap = snapRow(pt.py, blockLayouts)
       if (snap) {
         const idx = blockLayouts.indexOf(snap.layout)
-        const off = computeBlockOffsets(blocks)[idx]
+        const off = blockOffsets[idx]
         const b = snap.layout.block
-        const measure = Math.floor(snap.row / Math.max(1, b.beat * b.split)) + 1
-        const beat = Math.floor((snap.row % Math.max(1, b.beat * b.split)) / Math.max(1, b.split)) + 1
+        const cells = blockCells(b.beat, b.split)
+        const measure = Math.floor(snap.row / cells) + 1
+        const beat = Math.floor((snap.row % cells) / Math.max(1, b.split)) + 1
         const ms = off ? off.startMs + snap.row * off.msPerRow : 0
         status.textContent =
           `${formatMs(ms)} · #${idx + 1} · row ${snap.row}/${snap.layout.totalRows} · measure ${measure} · beat ${beat}`
@@ -342,7 +367,7 @@ function ChartGridInner({
     if (col < 0 || col >= cols) { hl.style.display = 'none'; return }
     // Подсветка повторяет зону клика: квадрат вокруг ближайшей линии (в плотных
     // блоках = полная ячейка rh, в редких = cw×cw), скрыт в мёртвой зоне.
-    const hit = hitLine(chartY, blockLayouts, cw)
+    const hit = hitLine(pt.py, blockLayouts, cw)
     if (!hit) { hl.style.display = 'none'; return }
     const half = hitHalf(hit.layout.rh, cw)
     hl.style.display = 'block'
@@ -357,7 +382,6 @@ function ChartGridInner({
     if (statusRef.current) statusRef.current.textContent = ''
   }
 
-  const blocks = useMemo(() => blockLayouts.map(l => l.block), [blockLayouts])
   usePlayback(blocks, blockLayouts, scrollRef, { contentRef, gridRef, playbackYRef })
 
   // Времена хитов для оверлея-счётчика — считаем только когда оверлей включён.
@@ -371,12 +395,11 @@ function ChartGridInner({
   // скроллы на паузе; isPlaying-гард — страховка от остаточных событий.
   const handleScroll = (newScrollTop: number) => {
     if (isPlaying) return
-    const offsets = computeBlockOffsets(blocks)
-    setCurrentTime(scrollYToMs(newScrollTop, offsets, blockLayouts))
+    setCurrentTime(scrollYToMs(newScrollTop, blockOffsets, blockLayouts))
   }
 
   const { onPointerDown, onPointerMove, onPointerUp, onPointerCancel, preview, tapPreview } =
-    useEditor(blockLayouts, scrollRef, activeTabId, cols, cw, cursorY, scrollOffset)
+    useEditor(blockLayouts, activeTabId, cols, cw, toChartPoint)
 
   // Превью растягивающегося холда (синтетическая нота на каждый затронутый блок,
   // включая кросс-блочные части) и/или Alt+drag серии тапов. Не зависит от scroll.

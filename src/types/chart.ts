@@ -41,6 +41,12 @@ export interface Chart {
   editorSettings?: EditorSettings
 }
 
+// Число колонок чарта: Single = 5, Double = 10. Единственное место с этим
+// маппингом — редактор, сериализатор и шорткаты обязаны совпадать.
+export function chartCols(chart: Pick<Chart, 'chartType'>): number {
+  return chart.chartType === 'Double' ? 10 : 5
+}
+
 export interface Tab {
   id: string
   chart: Chart

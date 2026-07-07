@@ -1,5 +1,18 @@
 import type { Block, Note } from '@/types/chart'
 
+// Эффективный конец ноты: для холда — endRow, для tap — её же строка.
+export function noteEnd(n: Note): number {
+  return n.type === 'hold' ? (n.endRow ?? n.row) : n.row
+}
+
+// Убрать все ноты колонки col, пересекающие диапазон строк [from..to].
+// Результат ОБЯЗАТЕЛЬНО прогонять через sanitizeHoldFlags на уровне blocks:
+// удалённая часть кросс-блочного холда оставляет партнёрам висячие
+// continues/continued, и сериализатор выпустит битую цепочку.
+export function clearColumnSpan(notes: Note[], col: number, from: number, to: number): Note[] {
+  return notes.filter(n => n.col !== col || noteEnd(n) < from || n.row > to)
+}
+
 // Все блочные части кросс-блочной холд-цепочки, содержащей (blocks[anyIdx], col).
 // Цепочка связана флагами continues (уходит в следующий блок) / continued
 // (пришла из предыдущего).

@@ -5,6 +5,10 @@ import { useEditorStore } from '@/store/editorStore'
 import { blockRowCount } from '@/utils/geometry'
 import { blockRowAtMs } from '@/utils/timing'
 
+// Ширина попапа. Используется и здесь (стиль), и в ChartGrid (расчёт позиции с
+// флипом у края экрана) — обязана быть одним числом.
+export const BLOCK_POPUP_WIDTH = 240
+
 const BEAT_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 12, 16]
 const SPLIT_OPTIONS = [1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 128]
 
@@ -58,8 +62,8 @@ export function BlockSettingsPopup({ blockId, index, top, left, editorTop, edito
     <div
       ref={popupRef}
       data-testid="block-settings-popup"
-      className="fixed z-50 w-60 bg-card border border-border rounded-md shadow-xl text-xs overflow-hidden"
-      style={{ top: clampedTop, left }}
+      className="fixed z-50 bg-card border border-border rounded-md shadow-xl text-xs overflow-hidden"
+      style={{ top: clampedTop, left, width: BLOCK_POPUP_WIDTH }}
       onPointerDown={e => e.stopPropagation()}
     >
       <div className="flex items-center justify-between px-3 py-2 border-b border-border">

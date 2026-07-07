@@ -1,5 +1,6 @@
-import { useRef, useEffect, useMemo, useState } from 'react'
+import { useCallback, useRef, useEffect, useMemo, useState } from 'react'
 import { audioEngine } from '@/services/audioEngine'
+import { togglePlayback } from '@/services/playbackControl'
 import { useTabsStore } from '@/store/tabsStore'
 import { useEditorStore } from '@/store/editorStore'
 import { useAudio } from '@/hooks/useAudio'
@@ -8,28 +9,23 @@ import { blockRowCount } from '@/utils/geometry'
 import { computeHitTimes, countPassed } from '@/utils/noteCount'
 import { FIELD_ZOOM_MIN, FIELD_ZOOM_MAX, FIELD_ZOOM_STEP } from '@/utils/viewSettings'
 
-interface TimeDisplayProps {
-  totalMs: number
-}
-
-function TimeDisplay({ totalMs }: TimeDisplayProps) {
+// Персистентный RAF, пишущий текст позиции напрямую в DOM (textContent) — без
+// React-ререндеров каждый кадр. Playback → audioEngine; скраб/пауза → editorStore.
+// Цифры незачем гонять на 120fps — обновление ~раз в 33мс освобождает бюджет
+// кадра для плавной анимации чарта.
+function useRafTextRef(compute: (ms: number) => string) {
   const ref = useRef<HTMLSpanElement>(null)
-
-  // Единый персистентный RAF, пишет напрямую в DOM (textContent) — без React-
-  // ререндеров каждый кадр. Playback → audioEngine; скраб/пауза → editorStore.
   useEffect(() => {
     let rafId: number
     let lastText = ''
     let lastUpdate = 0
     const tick = (now: number) => {
-      // Цифры мс незачем гонять на 120fps — обновляем ~раз в 33мс, освобождая
-      // бюджет кадра для плавной анимации чарта.
       if (now - lastUpdate >= 33) {
         lastUpdate = now
         const ms = audioEngine.isPlaying()
           ? audioEngine.getCurrentMs()
           : useEditorStore.getState().currentTime
-        const text = `${formatMs(ms)} / ${formatMs(totalMs)}`
+        const text = compute(ms)
         if (text !== lastText && ref.current) {
           ref.current.textContent = text
           lastText = text
@@ -39,8 +35,14 @@ function TimeDisplay({ totalMs }: TimeDisplayProps) {
     }
     rafId = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(rafId)
-  }, [totalMs])
+  }, [compute])
+  return ref
+}
 
+function TimeDisplay({ totalMs }: { totalMs: number }) {
+  const ref = useRafTextRef(
+    useCallback((ms: number) => `${formatMs(ms)} / ${formatMs(totalMs)}`, [totalMs]),
+  )
   return (
     <span
       ref={ref}
@@ -50,36 +52,15 @@ function TimeDisplay({ totalMs }: TimeDisplayProps) {
   )
 }
 
-// Счётчик нот «пройдено / всего». Пройденное обновляется по RAF (как TimeDisplay),
-// без React-ререндеров каждый кадр. В конце трека числа сравниваются.
+// Счётчик нот «пройдено / всего». В конце трека числа сравниваются.
 function NoteCountDisplay({ hitTimes }: { hitTimes: number[] }) {
-  const ref = useRef<HTMLSpanElement>(null)
+  const ref = useRafTextRef(
+    useCallback((ms: number) => String(countPassed(hitTimes, ms)), [hitTimes]),
+  )
   const total = hitTimes.length
   // Резервируем ширину «пройдено» под число разрядов общего количества, чтобы при
   // переходе через 999→1000 (когда total > 999) счётчик не дёргал «/ total».
   const passedWidthCh = String(total).length
-  useEffect(() => {
-    let rafId: number
-    let lastText = ''
-    let lastUpdate = 0
-    const tick = (now: number) => {
-      if (now - lastUpdate >= 33) {
-        lastUpdate = now
-        const ms = audioEngine.isPlaying()
-          ? audioEngine.getCurrentMs()
-          : useEditorStore.getState().currentTime
-        const text = String(countPassed(hitTimes, ms))
-        if (text !== lastText && ref.current) {
-          ref.current.textContent = text
-          lastText = text
-        }
-      }
-      rafId = requestAnimationFrame(tick)
-    }
-    rafId = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(rafId)
-  }, [hitTimes, total])
-
   return (
     <span className="text-xs font-mono text-muted-foreground tabular-nums whitespace-nowrap shrink-0" title="Notes passed / total">
       ♪ <span ref={ref} className="inline-block text-right" style={{ minWidth: `${passedWidthCh}ch` }} /> / {total}
@@ -89,7 +70,20 @@ function NoteCountDisplay({ hitTimes }: { hitTimes: number[] }) {
 
 export function Toolbar() {
   const { tabs, activeTabId, setTabScale, setTabPlaybackRate } = useTabsStore()
-  const { isPlaying, currentTime, setPlaying, setCurrentTime, fieldZoom, setFieldZoom, rhythmColoring, setRhythmColoring, hitSounds, setHitSounds, metronome, setMetronome, musicVolume, setMusicVolume } = useEditorStore()
+  // По-полевые подписки: подписка на весь стор (с currentTime) ререндерила бы
+  // весь тулбар на каждый тик скролла/скраба; currentTime читается через
+  // getState() в handlePlayPause и RAF-дисплеях.
+  const isPlaying = useEditorStore(s => s.isPlaying)
+  const fieldZoom = useEditorStore(s => s.fieldZoom)
+  const setFieldZoom = useEditorStore(s => s.setFieldZoom)
+  const rhythmColoring = useEditorStore(s => s.rhythmColoring)
+  const setRhythmColoring = useEditorStore(s => s.setRhythmColoring)
+  const hitSounds = useEditorStore(s => s.hitSounds)
+  const setHitSounds = useEditorStore(s => s.setHitSounds)
+  const metronome = useEditorStore(s => s.metronome)
+  const setMetronome = useEditorStore(s => s.setMetronome)
+  const musicVolume = useEditorStore(s => s.musicVolume)
+  const setMusicVolume = useEditorStore(s => s.setMusicVolume)
   const activeTab = tabs.find(t => t.id === activeTabId)
 
   const totalMs = useMemo(() => {
@@ -130,23 +124,10 @@ export function Toolbar() {
   const scale = activeTab?.scale ?? 3
   const playbackRate = activeTab?.playbackRate ?? 1.0
 
-  const handlePlayPause = () => {
-    if (!audioEngine.hasAudio()) return
-    if (isPlaying) {
-      const pausedAt = audioEngine.getCurrentMs()
-      audioEngine.pause()
-      setPlaying(false)
-      setCurrentTime(pausedAt)
-    } else {
-      audioEngine.play(currentTime)
-      setPlaying(true)
-    }
-  }
-
   return (
     <div className="flex items-center gap-3 px-3 h-10 border-b border-border bg-card shrink-0 text-sm">
       <button
-        onClick={handlePlayPause}
+        onClick={togglePlayback}
         disabled={!audioReady}
         className="w-7 h-7 flex items-center justify-center rounded bg-primary text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-40"
         title={isPlaying ? 'Pause (Space)' : 'Play (Space)'}

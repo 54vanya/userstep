@@ -10,6 +10,8 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
+    // Только юнит-тесты: e2e/ — Playwright-спеки, vitest их запускать не должен.
+    include: ['src/**/*.test.ts'],
   },
   plugins: [
     react(),

@@ -1,5 +1,6 @@
 import type { Block } from '@/types/chart'
 import { computeBlockOffsets } from './timing'
+import { noteEnd } from './holds'
 
 // Отсортированные времена всех «хитов». Хит — строка (момент времени), где есть
 // хотя бы одна активная ячейка: tap, голова/тело/хвост холда (холд даёт хит на
@@ -12,7 +13,7 @@ export function computeHitTimes(blocks: Block[]): number[] {
     if (!off) return
     const rows = new Set<number>()
     for (const n of b.notes) {
-      const end = n.type === 'hold' ? (n.endRow ?? n.row) : n.row
+      const end = noteEnd(n)
       for (let r = n.row; r <= end; r++) rows.add(r)
     }
     rows.forEach(r => times.push(off.startMs + r * off.msPerRow))
