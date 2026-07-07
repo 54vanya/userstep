@@ -1,5 +1,4 @@
 import { TabBar } from '@/components/tabs/TabBar'
-import { Toolbar } from '@/components/toolbar/Toolbar'
 import { Sidebar } from '@/components/sidebar/Sidebar'
 import { ChartEditor } from '@/components/editor/ChartEditor'
 import { FpsMeter } from '@/components/FpsMeter'
@@ -11,9 +10,7 @@ import { importUcsViaDialog, openPiuViaDialog, openDroppedFile } from '@/service
 import { usePwaUpdate } from '@/hooks/usePwaUpdate'
 
 export function App() {
-  const { tabs, activeTabId } = useTabsStore()
-  const activeTab = tabs.find(t => t.id === activeTabId)
-  const showSidebar = !!activeTab && !activeTab.isBlank
+  const { tabs } = useTabsStore()
   const { needRefresh, update } = usePwaUpdate()
   const showFps = useEditorStore(s => s.showFps)
 
@@ -52,13 +49,10 @@ export function App() {
         <TabBar />
       </div>
       {tabs.length > 0 ? (
-        <>
-          <Toolbar />
-          <div className="flex flex-1 overflow-hidden">
-            {showSidebar && <Sidebar />}
-            <ChartEditor />
-          </div>
-        </>
+        <div className="flex flex-1 overflow-hidden">
+          <Sidebar />
+          <ChartEditor />
+        </div>
       ) : (
         <WelcomeScreen />
       )}

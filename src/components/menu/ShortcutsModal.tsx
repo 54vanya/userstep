@@ -42,7 +42,7 @@ const SECTIONS: Section[] = [
     rows: [
       ['Space', 'Play / pause'],
     ],
-    note: 'Works everywhere except when a text field is focused. Rush 0.2×–4× — slider in the toolbar.',
+    note: 'Works everywhere except when a text field is focused. Rush 0.2×–4× — slider in the left sidebar.',
   },
   {
     title: 'Files & tabs',
@@ -177,7 +177,7 @@ export function ShortcutsModal({ onClose }: Props) {
           ))}
           <p className="text-muted-foreground border-t border-border pt-2">
             <Kbd>Ctrl</Kbd> always means “Ctrl or Cmd” (both work on macOS).
-            Also: metronome and hit sounds are toolbar checkboxes; resize a block by
+            Also: metronome and hit sounds are sidebar checkboxes; resize a block by
             dragging its bottom edge on the rail; the status bar below the grid shows
             the position under the mouse.
           </p>

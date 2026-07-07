@@ -7,9 +7,9 @@ async function openEmptyChart(page: Page) {
   await page.waitForTimeout(400)
 }
 
-// ── Toolbar time display ─────────────────────────────────────────────────────
+// ── Sidebar time display ─────────────────────────────────────────────────────
 
-test('toolbar shows current / total time after opening a chart', async ({ page }) => {
+test('sidebar shows current / total time after opening a chart', async ({ page }) => {
   await openEmptyChart(page)
   const display = page.getByTestId('time-display')
   await expect(display).toBeVisible()
@@ -46,10 +46,18 @@ test('welcome screen renders', async ({ page }) => {
 
 // ── Chart editor layout ──────────────────────────────────────────────────────
 
-test('sidebar shows Chart Info only — no Blocks section', async ({ page }) => {
+test('chart info opens in a modal from the File menu', async ({ page }) => {
   await openEmptyChart(page)
-  await expect(page.getByText('CHART INFO')).toBeVisible()
-  await expect(page.getByText('BLOCKS')).not.toBeVisible()
+  // Метаданные больше не живут в сайдбаре — только в модалке File → Chart info.
+  await expect(page.getByText('CHART INFO')).not.toBeVisible()
+  await page.click('text=File')
+  await page.click('text=Chart info')
+  const modal = page.getByTestId('chart-info-modal')
+  await expect(modal).toBeVisible()
+  await expect(modal.getByText('Title')).toBeVisible()
+  await expect(modal.getByText('Artist')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(modal).not.toBeVisible()
 })
 
 test('block rail is visible on the right with block info', async ({ page }) => {

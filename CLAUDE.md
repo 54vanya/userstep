@@ -27,7 +27,7 @@ PWA: vite-plugin-pwa (Workbox), ручное обновление через `us
 - **Операции над блоками** (`utils/blockOps.ts` + кнопки в BlockSettingsPopup): split here / merge with next / delete below; смена Split пересчитывает строки нот (adjust beat-split, коллизии после округления схлопываются); resize блока перетаскиванием нижней границы за рельсу
 - **Ввод нот**: клик = tap (по ноте — удалить), drag вниз = hold (через границы блоков), Alt+drag = серия тапов; live-запись при playback — две раскладки (View → Live input keys, `editorStore.liveKeyLayout`): UCS Lite = Z/Q/S/E/C (кол. 0–4) и NumPad 1/7/5/9/3 (кол. 5–9), StepMania = верхний ряд цифр 1…9,0 (кол. 0–9)
 - **Клавиши**: Space = play/pause, Ctrl+S = сохранить, Ctrl+Z/Y = undo/redo, Ctrl+N/O/W = таб-операции, Ctrl+Tab = перебор табов, ↑↓/PgUp/PgDn/Home/End = навигация, Ctrl+колесо = зум поля. Полная справка: `docs/KEYBOARD.md` и в приложении (File → Keyboard shortcuts, `ShortcutsModal.tsx`). Глобальные шорткаты — в `ChartEditor.tsx`, навигация — в `ChartGrid.tsx`; текстовые поля различаются через `utils/dom.ts:isTextEntry` (пробел на слайдерах/чекбоксах уходит в play/pause)
-- **Тулбар**: play, per-tab Scale, Zoom поля (50–300%), Rush 0.2–4×, Volume, счётчик нот (`utils/noteCount.ts`), чекбоксы Rhythm coloring / Hit sounds / Metronome
+- **Сайдбар** (слева, бывший тулбар): play, per-tab Scale, Zoom поля (50–300%), Rush 0.2–4×, Volume, счётчик нот (`utils/noteCount.ts`), чекбоксы Rhythm coloring / Hit sounds / Metronome, кнопка аудио-файла. Метаданные чарта (Title/Artist/Level/Mode) — в модалке File → Chart info (`ChartInfoModal.tsx`)
 - **Звуковой ассист** (`utils/hitSounds.ts` + `useHitSounds`): бипы по нотам у курсора (высота зависит от доли) и метроном по долям; планируются наперёд через `audioEngine.scheduleBeep`, идут мимо musicGain (слайдер Volume на них не влияет)
 - **Ритм-окраска** (`utils/rhythmColors.ts`): цвет ноты по доле (4-я/8-я/16-я…), перекраска спрайта через `mix-blend-mode:color` по маске (BlockLayer)
 - **View-настройки** (`utils/viewSettings.ts`, localStorage `piu-view-settings`): линии сетки, скин (basic/blocks), FPS-метр, счётчик нот, окраска секций рельсы, раскладка live-записи, режим playback (+ кап 60 FPS для записи видео), зум, выравнивание поля (left/center, сдвигает и комбо-оверлей), звуки; тема (system/light/dark) — отдельно в `utils/theme.ts`
@@ -97,9 +97,10 @@ src/
 │   │   ├── BlockRail.tsx     — рельса справа: BPM/beat/split, клик → попап, + внизу
 │   │   ├── BlockSettingsPopup.tsx, Cursor.tsx, ColumnHeaders.tsx
 │   │   ├── NoteCounterOverlay.tsx, WelcomeScreen.tsx
-│   ├── menu/MenuBar.tsx, menu/ShortcutsModal.tsx
+│   ├── menu/MenuBar.tsx, menu/ShortcutsModal.tsx, menu/ChartInfoModal.tsx
 │   ├── tabs/TabBar.tsx, tabs/TabItem.tsx
-│   ├── toolbar/Toolbar.tsx, sidebar/Sidebar.tsx, FpsMeter.tsx
+│   ├── sidebar/Sidebar.tsx   — левый сайдбар: play/время/счётчик, слайдеры, чекбоксы
+│   ├── FpsMeter.tsx
 └── app/App.tsx               — каркас, drag&drop, PWA-баннер обновления
 ```
 
