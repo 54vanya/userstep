@@ -9,7 +9,7 @@ import { useHitSounds } from '@/hooks/useHitSounds'
 import { isTextEntry } from '@/utils/dom'
 import { blockRowAtMs } from '@/utils/timing'
 import { blockRowCount } from '@/utils/geometry'
-import { clearColumnSpan, sanitizeHoldFlags } from '@/utils/holds'
+import { clearColumnSpan, comparePos, placeHoldSpan, sanitizeHoldFlags, type BlockPos } from '@/utils/holds'
 import {
   saveActivePiu,
   importUcsViaDialog,
@@ -62,16 +62,16 @@ export function ChartEditor() {
 
   useEffect(() => {
     // Рисование холда с клавиатуры: пока клавиша-колонка зажата, ArrowDown/Up
-    // растягивает/укорачивает холд от строки постановки (только на паузе, в
-    // пределах блока). На время жеста undo-история ставится на паузу — весь
-    // жест сворачивается в один шаг отмены (снэпшот тапа при keydown).
+    // растягивает/укорачивает холд от строки постановки (только на паузе;
+    // через границы блоков — цепочкой continues/continued, как мышиный drag).
+    // На время жеста undo-история ставится на паузу — весь жест сворачивается
+    // в один шаг отмены (снэпшот тапа при keydown).
     let keyHold: {
       code: string
       col: number
       tabId: string
-      blockIdx: number
-      anchorRow: number
-      endRow: number
+      anchor: BlockPos
+      end: BlockPos
       paused: boolean
     } | null = null
 
@@ -126,14 +126,16 @@ export function ChartEditor() {
         useTabsStore.getState().updateChart(st.tab.id, { ...st.tab.chart, blocks: sanitizeHoldFlags(blocks) })
         // Якорь для растягивания холда стрелками, пока клавиша зажата.
         if (!ed.isPlaying && !toggledOff) {
-          keyHold = { code: e.code, col, tabId: st.tab.id, blockIdx: pos.blockIdx, anchorRow: pos.row, endRow: pos.row, paused: false }
+          const anchor = { blockIdx: pos.blockIdx, row: pos.row }
+          keyHold = { code: e.code, col, tabId: st.tab.id, anchor, end: anchor, paused: false }
         }
         return
       }
 
-      // Зажатая клавиша-колонка + ArrowDown/Up — растягивание холда от якоря
-      // (ArrowUp укорачивает обратно; выше якоря не поднимается — остаётся tap).
-      // preventDefault не зовём: курсор двигает обработчик навигации ChartGrid.
+      // Зажатая клавиша-колонка + ArrowDown/Up — растягивание холда от якоря,
+      // через границы блоков (ArrowUp укорачивает обратно; выше якоря не
+      // поднимается — остаётся tap). preventDefault не зовём: курсор двигает
+      // обработчик навигации ChartGrid.
       if (keyHold && !ed.isPlaying && !inInput && !e.altKey && !e.ctrlKey && !e.metaKey
           && (e.code === 'ArrowDown' || e.code === 'ArrowUp')) {
         const st = activeTabState()
@@ -141,25 +143,29 @@ export function ChartEditor() {
           endKeyHold()
           return
         }
-        const block = st.tab.chart.blocks[keyHold.blockIdx]
-        const maxRow = blockRowCount(block) - 1
+        const blocks = st.tab.chart.blocks
         const dir = e.code === 'ArrowDown' ? 1 : -1
-        const next = Math.min(maxRow, Math.max(keyHold.anchorRow, keyHold.endRow + dir))
-        if (next === keyHold.endRow) return
-        const prevEnd = keyHold.endRow
-        keyHold.endRow = next
+        // Шаг конца холда на строку; выход за границу блока — переход к соседнему.
+        let next: BlockPos = { blockIdx: keyHold.end.blockIdx, row: keyHold.end.row + dir }
+        if (next.row < 0) {
+          if (next.blockIdx === 0) return
+          next = { blockIdx: next.blockIdx - 1, row: blockRowCount(blocks[next.blockIdx - 1]) - 1 }
+        } else if (next.row >= blockRowCount(blocks[next.blockIdx])) {
+          if (next.blockIdx === blocks.length - 1) return
+          next = { blockIdx: next.blockIdx + 1, row: 0 }
+        }
+        if (comparePos(next, keyHold.anchor) < 0) next = keyHold.anchor
+        if (comparePos(next, keyHold.end) === 0) return
+        const prevEnd = keyHold.end
+        keyHold.end = next
         if (!keyHold.paused) {
           useTabsStore.temporal.getState().pause()
           keyHold.paused = true
         }
-        const filtered = clearColumnSpan(block.notes, keyHold.col, keyHold.anchorRow, Math.max(prevEnd, next))
-        const note =
-          next === keyHold.anchorRow
-            ? { row: keyHold.anchorRow, col: keyHold.col, type: 'tap' as const }
-            : { row: keyHold.anchorRow, col: keyHold.col, type: 'hold' as const, endRow: next }
-        const bi = keyHold.blockIdx
-        const blocks = st.tab.chart.blocks.map((b, i) => (i === bi ? { ...b, notes: [...filtered, note] } : b))
-        useTabsStore.getState().updateChart(st.tab.id, { ...st.tab.chart, blocks: sanitizeHoldFlags(blocks) })
+        // При укорачивании расчищаем и хвост прежнего холда (clearEnd = prevEnd).
+        const clearEnd = comparePos(prevEnd, next) > 0 ? prevEnd : next
+        const newBlocks = placeHoldSpan(blocks, keyHold.col, keyHold.anchor, next, clearEnd)
+        useTabsStore.getState().updateChart(st.tab.id, { ...st.tab.chart, blocks: sanitizeHoldFlags(newBlocks) })
         return
       }
 

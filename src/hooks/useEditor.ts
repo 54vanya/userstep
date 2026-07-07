@@ -1,9 +1,9 @@
 import { useRef, useState, useCallback } from 'react'
 import { useTabsStore } from '@/store/tabsStore'
 import { useEditorStore } from '@/store/editorStore'
-import { blockRowCount, hitLine, snapRow } from '@/utils/geometry'
+import { hitLine, snapRow } from '@/utils/geometry'
 import type { BlockLayout } from '@/utils/geometry'
-import { clearColumnSpan, collectHoldChain, noteEnd, sanitizeHoldFlags } from '@/utils/holds'
+import { clearColumnSpan, collectHoldChain, noteEnd, placeHoldSpan, sanitizeHoldFlags } from '@/utils/holds'
 import type { Note, Block } from '@/types/chart'
 
 export interface HoldPreview {
@@ -299,43 +299,15 @@ export function useEditor(
     const startBlockIdx = chart.blocks.findIndex(b => b.id === blockId)
     const endBlockIdx = chart.blocks.findIndex(b => b.id === endBlockId)
 
-    if (startBlockIdx === endBlockIdx) {
-      // Single block. Замещённая нота могла быть частью кросс-блочной цепочки —
-      // sanitizeHoldFlags снимает висячие флаги у соседей.
-      const filtered = clearColumnSpan(startBlock.notes, col, startRow, endRow)
-      const newNote: Note = endRow === startRow
-        ? { row: startRow, col, type: 'tap' }
-        : { row: startRow, col, type: 'hold', endRow }
-      const blocks = chart.blocks.map(b => b.id === blockId ? { ...b, notes: [...filtered, newNote] } : b)
-      updateChart(activeTabId, { ...chart, blocks: sanitizeHoldFlags(blocks) })
-      return
-    }
-
-    // Cross-block hold
-    const newBlocks = chart.blocks.map((b, i) => {
-      if (i < startBlockIdx || i > endBlockIdx) return b
-
-      const totalRows = blockRowCount(b)
-      const isFirst = i === startBlockIdx
-      const isLast = i === endBlockIdx
-      const clearFrom = isFirst ? startRow : 0
-      const clearTo = isLast ? endRow : totalRows - 1
-
-      const filtered = clearColumnSpan(b.notes, col, clearFrom, clearTo)
-
-      let newNote: Note
-      if (isFirst) {
-        newNote = { row: startRow, col, type: 'hold', endRow: totalRows - 1, continues: true }
-      } else if (isLast) {
-        newNote = { row: 0, col, type: 'hold', endRow, continued: true }
-      } else {
-        newNote = { row: 0, col, type: 'hold', endRow: totalRows - 1, continued: true, continues: true }
-      }
-
-      return { ...b, notes: [...filtered, newNote] }
-    })
-
-    // Расчистка колонки могла задеть чужие цепочки за пределами нового холда.
+    // Постановка tap/hold (в т.ч. кросс-блочной цепочки) одним хелпером;
+    // расчистка колонки могла задеть чужие цепочки — sanitizeHoldFlags снимает
+    // висячие флаги у соседей.
+    const newBlocks = placeHoldSpan(
+      chart.blocks,
+      col,
+      { blockIdx: startBlockIdx, row: startRow },
+      { blockIdx: endBlockIdx, row: endRow },
+    )
     updateChart(activeTabId, { ...chart, blocks: sanitizeHoldFlags(newBlocks) })
   }, [activeTab, activeTabId, updateChart, blockLayouts])
 

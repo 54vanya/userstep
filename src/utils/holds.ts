@@ -1,4 +1,16 @@
 import type { Block, Note } from '@/types/chart'
+import { blockRowCount } from './geometry'
+
+// Позиция строки в чарте: индекс блока + строка внутри него.
+export interface BlockPos {
+  blockIdx: number
+  row: number
+}
+
+// Порядок позиций: сначала блок, внутри блока — строка.
+export function comparePos(a: BlockPos, b: BlockPos): number {
+  return a.blockIdx - b.blockIdx || a.row - b.row
+}
 
 // Эффективный конец ноты: для холда — endRow, для tap — её же строка.
 export function noteEnd(n: Note): number {
@@ -11,6 +23,48 @@ export function noteEnd(n: Note): number {
 // continues/continued, и сериализатор выпустит битую цепочку.
 export function clearColumnSpan(notes: Note[], col: number, from: number, to: number): Note[] {
   return notes.filter(n => n.col !== col || noteEnd(n) < from || n.row > to)
+}
+
+// Поставить холд (tap при нулевой длине) в колонку col от start до end
+// (end >= start), расчистив колонку под ним. Расчистку можно продлить до
+// clearEnd (>= end) — нужно живому клавиатурному жесту при укорачивании,
+// чтобы стереть хвост прежнего, более длинного холда в следующих блоках.
+// Кросс-блочный холд — цепочка нот с флагами continues/continued.
+// Результат ОБЯЗАТЕЛЬНО прогонять через sanitizeHoldFlags: расчистка могла
+// разрезать чужие цепочки.
+export function placeHoldSpan(
+  blocks: Block[],
+  col: number,
+  start: BlockPos,
+  end: BlockPos,
+  clearEnd: BlockPos = end,
+): Block[] {
+  return blocks.map((b, i) => {
+    if (i < start.blockIdx || i > clearEnd.blockIdx) return b
+    const totalRows = blockRowCount(b)
+    const clearFrom = i === start.blockIdx ? start.row : 0
+    const clearTo = i === clearEnd.blockIdx ? clearEnd.row : totalRows - 1
+    let notes = clearColumnSpan(b.notes, col, clearFrom, clearTo)
+    if (i <= end.blockIdx) {
+      const isFirst = i === start.blockIdx
+      const isLast = i === end.blockIdx
+      let note: Note
+      if (isFirst && isLast) {
+        note =
+          end.row === start.row
+            ? { row: start.row, col, type: 'tap' }
+            : { row: start.row, col, type: 'hold', endRow: end.row }
+      } else if (isFirst) {
+        note = { row: start.row, col, type: 'hold', endRow: totalRows - 1, continues: true }
+      } else if (isLast) {
+        note = { row: 0, col, type: 'hold', endRow: end.row, continued: true }
+      } else {
+        note = { row: 0, col, type: 'hold', endRow: totalRows - 1, continued: true, continues: true }
+      }
+      notes = [...notes, note]
+    }
+    return { ...b, notes }
+  })
 }
 
 // Все блочные части кросс-блочной холд-цепочки, содержащей (blocks[anyIdx], col).
