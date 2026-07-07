@@ -95,7 +95,7 @@ src/
 │   │   ├── GridLayer.tsx     — сетка блока одним gradient-фоном (pixel-snap слой)
 │   │   ├── BlockLayer.tsx    — спрайты нот блока (memo), ритм-окраска, превью
 │   │   ├── BlockRail.tsx     — рельса справа: BPM/beat/split, клик → попап, + внизу
-│   │   ├── BlockSettingsPopup.tsx, Cursor.tsx, ColumnHeaders.tsx
+│   │   ├── BlockSettingsPopup.tsx, Cursor.tsx
 │   │   ├── NoteCounterOverlay.tsx, WelcomeScreen.tsx
 │   ├── menu/MenuBar.tsx, menu/ShortcutsModal.tsx, menu/ChartInfoModal.tsx
 │   ├── tabs/TabBar.tsx, tabs/TabItem.tsx

@@ -21,7 +21,6 @@ import { useChart } from '@/hooks/useChart'
 import { useEditor } from '@/hooks/useEditor'
 import { usePlayback } from '@/hooks/usePlayback'
 import { computeBlockOffsets, msToScrollY, scrollYToMs, formatMs } from '@/utils/timing'
-import { ColumnHeaders } from './ColumnHeaders'
 import { BlockRail } from './BlockRail'
 import { BlockSettingsPopup, BLOCK_POPUP_WIDTH } from './BlockSettingsPopup'
 import { BlockLayer } from './BlockLayer'
@@ -464,10 +463,6 @@ function ChartGridInner({
   return (
     <div className="relative flex flex-col h-full overflow-hidden">
       {showNoteCounter && <NoteCounterOverlay hitTimes={counterHitTimes} width={notesWidth} left={fieldOffsetX} />}
-      <div className="flex shrink-0" style={{ paddingLeft: fieldOffsetX }}>
-        <ColumnHeaders cols={cols} cw={cw} />
-        <div className="shrink-0 border-b border-l border-grid-beat bg-card" style={{ width: RAIL_WIDTH, height: 32 }} />
-      </div>
       <div
         ref={scrollRef}
         className="flex-1 overflow-x-auto bg-grid select-none"
@@ -493,6 +488,10 @@ function ChartGridInner({
         <Cursor cursorY={cursorY} />
         <div style={{ height: cursorY, flexShrink: 0 }} />
         <div ref={contentRef} style={{ position: 'relative', height: totalHeight, width: notesWidth + RAIL_WIDTH, marginLeft: fieldOffsetX }}>
+          {/* Левая кромка поля при центрировании (справа её даёт border-l рельсы) */}
+          {fieldOffsetX > 0 && (
+            <div className="absolute top-0 border-l border-grid-beat pointer-events-none" style={{ left: 0, height: totalHeight }} />
+          )}
           {railColoring !== 'none' && (
             <div className="absolute left-0 top-0 pointer-events-none" style={{ width: notesWidth, height: totalHeight }}>
               {blockLayouts.map(({ block, startY, endY }, i) => {

@@ -29,7 +29,7 @@ export function NoteCounterOverlay({ hitTimes, width, left = 0 }: { hitTimes: nu
 
   return (
     <div
-      className="absolute top-8 bottom-0 flex items-center justify-center pointer-events-none z-30 select-none"
+      className="absolute top-0 bottom-0 flex items-center justify-center pointer-events-none z-30 select-none"
       style={{ width, left }}
     >
       <div
