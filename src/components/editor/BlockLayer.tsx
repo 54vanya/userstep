@@ -1,6 +1,6 @@
 import { memo } from 'react'
 import { useEditorStore } from '@/store/editorStore'
-import { rhythmColor, RHYTHM_YELLOW } from '@/utils/rhythmColors'
+import { rhythmColor, RHYTHM_YELLOW, RHYTHM_HOLD_BLUE } from '@/utils/rhythmColors'
 import { noteEnd } from '@/utils/holds'
 import type { Block, Note } from '@/types/chart'
 
@@ -88,25 +88,66 @@ function ImageSprite({ note, rh, cw, totalRows, skin, ghost, color }: { note: No
   // Тело тянется до ВЕРХНЕЙ грани кэпа (endRow*rh - cw/2), иначе оно просвечивало бы
   // сквозь полупрозрачную верхнюю часть кэпа.
   const bodyBot = note.continues ? totalRows * rh : endRow * rh - cw / 2
+  const bodySrc = `${base}/${dir}-Hold-Body.png`
+  const capSrc = `${base}/${dir}-Hold-BottomCap.png`
+  // При ритм-окраске (color задан) тело и кэп перекрашиваются единым синим тем же
+  // приёмом, что и голова: слой цвета с mix-blend-mode:color по маске спрайта.
+  const bodyStyle: React.CSSProperties = {
+    backgroundImage: `url(${bodySrc})`,
+    backgroundSize: `${cw}px auto`,
+    backgroundRepeat: 'repeat-y',
+  }
   return (
     <>
       <div
         className="absolute pointer-events-none"
         style={{
           left: x, top: bodyTop, width: cw, height: Math.max(0, bodyBot - bodyTop),
-          backgroundImage: `url(${base}/${dir}-Hold-Body.png)`,
-          backgroundSize: `${cw}px auto`,
-          backgroundRepeat: 'repeat-y',
-          opacity,
+          opacity, isolation: 'isolate',
+          ...(color ? {} : bodyStyle),
         }}
-      />
+      >
+        {color && (
+          <>
+            <div className="absolute inset-0" style={bodyStyle} />
+            <div
+              className="absolute inset-0"
+              style={{
+                backgroundColor: RHYTHM_HOLD_BLUE,
+                mixBlendMode: 'color',
+                WebkitMaskImage: `url(${bodySrc})`,
+                maskImage: `url(${bodySrc})`,
+                WebkitMaskSize: `${cw}px auto`,
+                maskSize: `${cw}px auto`,
+                WebkitMaskRepeat: 'repeat-y',
+                maskRepeat: 'repeat-y',
+              }}
+            />
+          </>
+        )}
+      </div>
       {!note.continues && (
-        <img
-          src={`${base}/${dir}-Hold-BottomCap.png`}
-          draggable={false}
+        <div
           className="absolute pointer-events-none"
-          style={{ left: x, top: endRow * rh, width: cw, height: cw, transform: 'translateY(-50%)', opacity }}
-        />
+          style={{ left: x, top: endRow * rh, width: cw, height: cw, transform: 'translateY(-50%)', opacity, isolation: 'isolate' }}
+        >
+          <img src={capSrc} draggable={false} className="block w-full h-full" />
+          {color && (
+            <div
+              className="absolute inset-0"
+              style={{
+                backgroundColor: RHYTHM_HOLD_BLUE,
+                mixBlendMode: 'color',
+                WebkitMaskImage: `url(${capSrc})`,
+                maskImage: `url(${capSrc})`,
+                WebkitMaskSize: '100% 100%',
+                maskSize: '100% 100%',
+                WebkitMaskRepeat: 'no-repeat',
+                maskRepeat: 'no-repeat',
+              }}
+            />
+          )}
+        </div>
       )}
       {!note.continued && (
         <ArrowSprite src={tapSrc} x={x} top={note.row * rh} cw={cw} opacity={opacity} color={color} z={1} lumFilter={lumFilter} />
@@ -141,6 +182,8 @@ function BlocksSprite({ note, rh, cw, totalRows, ghost, color }: { note: Note; r
       className="absolute bg-green-600 border-x border-green-400 pointer-events-none"
       style={{
         left: x + 1, top, width: cw - 2, height: Math.max(0, bot - top), opacity,
+        // При ритм-окраске тело холда — единый синий (голова у этого скина не отдельная).
+        ...(color ? { backgroundColor: RHYTHM_HOLD_BLUE, borderColor: '#7fa3f7' } : {}),
         borderTopWidth: roundTop ? 1 : 0,
         borderBottomWidth: roundBot ? 1 : 0,
         borderTopLeftRadius: roundTop ? 2 : 0,

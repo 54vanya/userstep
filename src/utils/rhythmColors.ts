@@ -25,6 +25,10 @@ const RHYTHM_COLORS: Record<number, string> = {
 }
 const RHYTHM_FALLBACK = '#9aa3ad'
 
+// Тело и хвостовой кэп холда при ритм-окраске — единый синий (тот же, что у 8-х):
+// ритмическую размерность несёт только голова, тело красится константой.
+export const RHYTHM_HOLD_BLUE = RHYTHM_COLORS[2]
+
 function gcd(a: number, b: number): number {
   return b === 0 ? a : gcd(b, a % b)
 }
