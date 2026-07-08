@@ -7,13 +7,14 @@ import type { Block, Note } from '@/types/chart'
 const DIRECTIONS = ['DownLeft', 'UpLeft', 'Center', 'UpRight', 'DownRight']
 
 // Подложка для ритм-окраски (скин 'basic') — заранее сгенерированные СЕРЫЕ спрайты с
-// нормализованной яркостью «тела» (public/skin/basic/rhythm/, см. скрипт генерации):
+// нормализованной яркостью «тела» (public/skin/basic/rhythm/: тапы, тела и кэпы
+// холдов; базовый цвет направления → серый 120, белый/чёрный сохранены):
 // все направления и центр приведены к единому тону, белые контуры сохранены. Благодаря
 // этому mix-blend-mode:color (берёт яркость подложки) даёт одинаковый цвет на всех
-// колонках — больше нет «центр светлее стрелок».
-function rhythmBase(skin: string, dir: string, color?: string): string {
+// колонках — больше нет «центр светлее стрелок» и скачков тона на телах холдов.
+function rhythmBase(skin: string, dir: string, color?: string, part = 'Tap-Note'): string {
   const prefix = color && skin === 'basic' ? `/skin/${skin}/rhythm` : `/skin/${skin}`
-  return `${prefix}/${dir}-Tap-Note.png`
+  return `${prefix}/${dir}-${part}.png`
 }
 
 // Яркостная коррекция перед color-блендингом. Подложка серая и нормализованная, так
@@ -69,11 +70,9 @@ function ArrowSprite({ src, x, top, cw, opacity, color, z, lumFilter }: { src: s
 function ImageSprite({ note, rh, cw, totalRows, skin, ghost, color }: { note: Note; rh: number; cw: number; totalRows: number; skin: string; ghost?: boolean; color?: string }) {
   const x = note.col * cw
   const dir = DIRECTIONS[note.col % 5]
-  const base = `/skin/${skin}`
   const opacity = ghost ? 0.5 : undefined
   const lumFilter = arrowFilter(color)
-  // При ритм-окраске tap/голова рисуются на нормализованном сером спрайте; тело и кэп
-  // холда — на обычных цветных (их ритм-окраска не трогает).
+  // При ритм-окраске tap/голова/тело/кэп рисуются на нормализованных серых спрайтах.
   const tapSrc = rhythmBase(skin, dir, color)
 
   if (note.type === 'tap') {
@@ -88,10 +87,11 @@ function ImageSprite({ note, rh, cw, totalRows, skin, ghost, color }: { note: No
   // Тело тянется до ВЕРХНЕЙ грани кэпа (endRow*rh - cw/2), иначе оно просвечивало бы
   // сквозь полупрозрачную верхнюю часть кэпа.
   const bodyBot = note.continues ? totalRows * rh : endRow * rh - cw / 2
-  const bodySrc = `${base}/${dir}-Hold-Body.png`
-  const capSrc = `${base}/${dir}-Hold-BottomCap.png`
-  // При ритм-окраске (color задан) тело и кэп перекрашиваются единым синим тем же
-  // приёмом, что и голова: слой цвета с mix-blend-mode:color по маске спрайта.
+  // При ритм-окраске (color задан) тело и кэп рисуются на нормализованных серых
+  // подложках и перекрашиваются единым синим тем же приёмом, что и голова: слой
+  // цвета с mix-blend-mode:color по маске спрайта — тон одинаков на всех колонках.
+  const bodySrc = rhythmBase(skin, dir, color, 'Hold-Body')
+  const capSrc = rhythmBase(skin, dir, color, 'Hold-BottomCap')
   const bodyStyle: React.CSSProperties = {
     backgroundImage: `url(${bodySrc})`,
     backgroundSize: `${cw}px auto`,
