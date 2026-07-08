@@ -35,6 +35,7 @@ PWA: vite-plugin-pwa (Workbox), ручное обновление через `us
 - **Delay**: ненулевой для первого блока (тишина до старта) или паузы между блоками; сериализатор сохраняет delay всех блоков
 - **AudioEngine** (singleton): `resume()` suspended-контекста при play (автоплей-политика после восстановления сессии), счётчик поколений `loadBlob` против гонки декодирования при переключении табов, фиксация позиции в `onended`
 - **Drag&drop файлов** в окно + PWA `file_handlers` (`launchQueue` в main.tsx). Файловые операции централизованы в `services/fileActions.ts`
+- **Деплой**: `Dockerfile` (node build → nginx-статика), `deploy/nginx.conf` (кэш-политика под PWA: sw.js/manifest/index.html — no-cache, хэшированные ассеты — immutable), `docker-compose.yml` (порт 8080, TLS — внешним прокси); инструкция — `docs/DEPLOY.md`
 - Функциональность и раскладки повторяют StepEdit Lite (декомпилированный эталон)
 
 ## Геометрия (`src/utils/geometry.ts`)

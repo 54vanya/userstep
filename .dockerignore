@@ -1,0 +1,16 @@
+node_modules
+dist
+.git
+.idea
+.claude
+.DS_Store
+test-results
+playwright-report
+e2e
+fileExamples
+docs
+logs
+*.log
+README.md
+TODO.md
+CLAUDE.md

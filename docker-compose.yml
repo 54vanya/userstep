@@ -1,0 +1,12 @@
+# Запуск на VPS: docker compose up -d --build
+# Контейнер слушает 80 внутри; наружу отдаём 8080 — снаружи ожидается
+# TLS-терминирующий reverse-proxy (см. docs/DEPLOY.md: service worker
+# работает только по HTTPS).
+services:
+  stepmaker:
+    build: .
+    image: piu-stepmaker
+    container_name: piu-stepmaker
+    restart: unless-stopped
+    ports:
+      - "8080:80"
