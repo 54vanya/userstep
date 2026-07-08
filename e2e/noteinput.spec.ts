@@ -85,6 +85,25 @@ test('зажатая клавиша + стрелки рисуют холд от 
   expect(await getNotes(page)).toHaveLength(0)
 })
 
+test('курсор следует за концом холда при растягивании стрелками', async ({ page }) => {
+  await openEmptyChart(page)
+  await page.keyboard.down('s')
+  for (let i = 0; i < 8; i++) await page.keyboard.press('ArrowDown')
+  await page.keyboard.up('s')
+
+  // Конец холда (нижний кэп) лежит ровно на линии курсора — обновление чарта
+  // внутри keydown не должно «съедать» шаг навигации (см. navDataRef в ChartGrid).
+  const gap = await page.evaluate(() => {
+    const cursor = document.querySelector('.bg-red-500\\/70')!.getBoundingClientRect()
+    const cap = document.querySelector('img[src*="BottomCap"]')!.getBoundingClientRect()
+    return Math.abs(cursor.top - (cap.top + cap.height / 2))
+  })
+  expect(gap).toBeLessThan(2)
+
+  const notes = await getNotes(page)
+  expect(notes[0]).toMatchObject({ row: 0, col: 2, type: 'hold', endRow: 8 })
+})
+
 test('live-запись: клавиша S во время playback кладёт tap в колонку 2', async ({ page }) => {
   await openEmptyChart(page)
 

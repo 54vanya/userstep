@@ -111,6 +111,10 @@ export function ChartEditor() {
         const st = activeTabState()
         if (!st || col >= st.cols) return
         e.preventDefault()
+        // Ввод ноты уводит фокус с контролов сайдбара (checkbox/slider): навигация
+        // ChartGrid пропускает INPUT-таргеты (стрелки нужны слайдерам), и с фокусом
+        // на контроле стрелки жеста холда растягивали бы ноту, не двигая курсор.
+        if (target instanceof HTMLElement && target.tagName === 'INPUT') target.blur()
         const ms = ed.isPlaying ? audioEngine.getCurrentMs() : ed.currentTime
         const pos = blockRowAtMs(st.tab.chart.blocks, ms)
         if (!pos) return

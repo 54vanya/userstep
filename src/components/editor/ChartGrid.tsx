@@ -291,6 +291,13 @@ function ChartGridInner({
   // Клавиатурная навигация (как в StepEdit Lite): ↑/↓ — строка, PgUp/PgDn —
   // страница, Home/End — начало/конец. Во время playback скролл заблокирован.
   // INPUT/SELECT/TEXTAREA пропускаем целиком: range-слайдеры сами ходят стрелками.
+  // Слушатель регистрируется ОДИН раз, layouts/offsets читаются через ref: если бы
+  // deps включали их, каждый updateChart пере-регистрировал бы слушатель, а React
+  // флашит эффекты в микротаске МЕЖДУ слушателями одного keydown — снятый посреди
+  // диспатча слушатель по DOM-спеке пропускает событие. Так терялся каждый шаг
+  // навигации во время клавиатурного растягивания холда (курсор отставал от ноты).
+  const navDataRef = useRef({ blockLayouts, blockOffsets })
+  navDataRef.current = { blockLayouts, blockOffsets }
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return
@@ -298,6 +305,7 @@ function ChartGridInner({
       if (isTextEntry(target) || target.tagName === 'INPUT') return
       const el = scrollRef.current
       if (!el || isPlayingRef.current) return
+      const { blockLayouts, blockOffsets } = navDataRef.current
 
       const maxY = el.scrollHeight - el.clientHeight
       let targetY: number | null = null
@@ -337,7 +345,7 @@ function ChartGridInner({
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [scrollRef, blockLayouts, blockOffsets])
+  }, [scrollRef])
 
   const prevScaleRef = useRef(scale)
   useLayoutEffect(() => {
