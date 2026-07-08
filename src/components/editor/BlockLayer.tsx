@@ -82,16 +82,21 @@ function ImageSprite({ note, rh, cw, totalRows, skin, ghost, color }: { note: No
   }
 
   const endRow = noteEnd(note)
-  const bodyTop = note.row * rh
+  // Тело начинается от НИЖНЕЙ грани клетки головы (row*rh + cw/2): в самой клетке
+  // рисуется заглушка Hold-HeadStub — фрагмент тела, обрезанный по нижнему контуру
+  // стрелки, чтобы рельсы «выходили из хвостика», а не торчали сбоку/выше него.
+  // У continued-частей цепочки головы нет — тело идёт от верха блока.
+  const bodyTop = note.continued ? note.row * rh : note.row * rh + cw / 2
   // Хвостовой кэп центрирован на линии хвоста (endRow*rh), как нота на хит-линии.
   // Тело тянется до ВЕРХНЕЙ грани кэпа (endRow*rh - cw/2), иначе оно просвечивало бы
   // сквозь полупрозрачную верхнюю часть кэпа.
   const bodyBot = note.continues ? totalRows * rh : endRow * rh - cw / 2
-  // При ритм-окраске (color задан) тело и кэп рисуются на нормализованных серых
-  // подложках и перекрашиваются единым синим тем же приёмом, что и голова: слой
+  // При ритм-окраске (color задан) тело, заглушка и кэп рисуются на нормализованных
+  // серых подложках и перекрашиваются единым синим тем же приёмом, что и голова: слой
   // цвета с mix-blend-mode:color по маске спрайта — тон одинаков на всех колонках.
   const bodySrc = rhythmBase(skin, dir, color, 'Hold-Body')
   const capSrc = rhythmBase(skin, dir, color, 'Hold-BottomCap')
+  const stubSrc = rhythmBase(skin, dir, color, 'Hold-HeadStub')
   const bodyStyle: React.CSSProperties = {
     backgroundImage: `url(${bodySrc})`,
     backgroundSize: `${cw}px auto`,
@@ -99,6 +104,29 @@ function ImageSprite({ note, rh, cw, totalRows, skin, ghost, color }: { note: No
   }
   return (
     <>
+      {!note.continued && (
+        <div
+          className="absolute pointer-events-none"
+          style={{ left: x, top: note.row * rh, width: cw, height: cw, transform: 'translateY(-50%)', opacity, isolation: 'isolate' }}
+        >
+          <img src={stubSrc} draggable={false} className="block w-full h-full" />
+          {color && (
+            <div
+              className="absolute inset-0"
+              style={{
+                backgroundColor: RHYTHM_HOLD_BLUE,
+                mixBlendMode: 'color',
+                WebkitMaskImage: `url(${stubSrc})`,
+                maskImage: `url(${stubSrc})`,
+                WebkitMaskSize: '100% 100%',
+                maskSize: '100% 100%',
+                WebkitMaskRepeat: 'no-repeat',
+                maskRepeat: 'no-repeat',
+              }}
+            />
+          )}
+        </div>
+      )}
       <div
         className="absolute pointer-events-none"
         style={{
