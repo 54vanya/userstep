@@ -104,6 +104,23 @@ test('курсор следует за концом холда при растя
   expect(notes[0]).toMatchObject({ row: 0, col: 2, type: 'hold', endRow: 8 })
 })
 
+test('зажатая клавиша + ArrowUp растягивает холд вверх от якоря', async ({ page }) => {
+  await openEmptyChart(page)
+  // Спускаем курсор на строку 5 и ставим якорь там.
+  for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowDown')
+  await page.keyboard.down('s')
+  await page.keyboard.press('ArrowUp')
+  await page.keyboard.press('ArrowUp')
+  await page.keyboard.press('ArrowUp')
+  await page.keyboard.press('ArrowDown') // укоротили обратно
+  await page.keyboard.up('s')
+
+  const notes = await getNotes(page)
+  expect(notes).toHaveLength(1)
+  // Голова холда — на подвижном верхнем конце, хвост — на якоре.
+  expect(notes[0]).toMatchObject({ row: 3, col: 2, type: 'hold', endRow: 5 })
+})
+
 test('live-запись: клавиша S во время playback кладёт tap в колонку 2', async ({ page }) => {
   await openEmptyChart(page)
 

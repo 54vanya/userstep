@@ -108,7 +108,7 @@ const SECTIONS: Section[] = [
       ['Z Q S E C', 'Columns ↙ ↖ ● ↗ ↘ (1P) — UCS Lite layout'],
       ['Num1 Num7 Num5 Num9 Num3', 'Columns ↙ ↖ ● ↗ ↘ (2P, double) — numeric keypad only'],
       ['1 2 3 4 5 6 7 8 9 0', 'Columns 0–9 left to right — StepMania layout'],
-      ['hold key + ↓ / ↑', 'Stretch / shrink a hold from the placed note (while paused)'],
+      ['hold key + ↓ / ↑', 'Stretch a hold from the placed note, down or up (while paused)'],
     ],
     note: 'Pick the layout in View → Live input keys. During playback (live recording) a tap lands on the row closest to the current moment (quantized to Split; slower Rush improves accuracy). When paused, the key acts like a click on the row under the cursor — an empty cell gets a tap, an occupied one is cleared; keep the key held and press ↓/↑ to grow a hold.',
   },

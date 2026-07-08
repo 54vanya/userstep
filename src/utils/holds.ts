@@ -27,8 +27,9 @@ export function clearColumnSpan(notes: Note[], col: number, from: number, to: nu
 
 // Поставить холд (tap при нулевой длине) в колонку col от start до end
 // (end >= start), расчистив колонку под ним. Расчистку можно продлить до
-// clearEnd (>= end) — нужно живому клавиатурному жесту при укорачивании,
-// чтобы стереть хвост прежнего, более длинного холда в следующих блоках.
+// clearEnd (>= end) и/или от clearStart (<= start) — нужно живому клавиатурному
+// жесту при укорачивании, чтобы стереть остаток прежнего, более длинного холда
+// с любой стороны (жест растёт и вниз, и вверх от якоря).
 // Кросс-блочный холд — цепочка нот с флагами continues/continued.
 // Результат ОБЯЗАТЕЛЬНО прогонять через sanitizeHoldFlags: расчистка могла
 // разрезать чужие цепочки.
@@ -38,14 +39,15 @@ export function placeHoldSpan(
   start: BlockPos,
   end: BlockPos,
   clearEnd: BlockPos = end,
+  clearStart: BlockPos = start,
 ): Block[] {
   return blocks.map((b, i) => {
-    if (i < start.blockIdx || i > clearEnd.blockIdx) return b
+    if (i < clearStart.blockIdx || i > clearEnd.blockIdx) return b
     const totalRows = blockRowCount(b)
-    const clearFrom = i === start.blockIdx ? start.row : 0
+    const clearFrom = i === clearStart.blockIdx ? clearStart.row : 0
     const clearTo = i === clearEnd.blockIdx ? clearEnd.row : totalRows - 1
     let notes = clearColumnSpan(b.notes, col, clearFrom, clearTo)
-    if (i <= end.blockIdx) {
+    if (i >= start.blockIdx && i <= end.blockIdx) {
       const isFirst = i === start.blockIdx
       const isLast = i === end.blockIdx
       let note: Note

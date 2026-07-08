@@ -136,10 +136,10 @@ export function ChartEditor() {
         return
       }
 
-      // Зажатая клавиша-колонка + ArrowDown/Up — растягивание холда от якоря,
-      // через границы блоков (ArrowUp укорачивает обратно; выше якоря не
-      // поднимается — остаётся tap). preventDefault не зовём: курсор двигает
-      // обработчик навигации ChartGrid.
+      // Зажатая клавиша-колонка + ArrowDown/Up — растягивание холда от якоря
+      // в ОБЕ стороны (вниз и вверх), через границы блоков; обратное движение
+      // укорачивает, на якоре холд схлопывается в tap. preventDefault не зовём:
+      // курсор двигает обработчик навигации ChartGrid.
       if (keyHold && !ed.isPlaying && !inInput && !e.altKey && !e.ctrlKey && !e.metaKey
           && (e.code === 'ArrowDown' || e.code === 'ArrowUp')) {
         const st = activeTabState()
@@ -158,7 +158,6 @@ export function ChartEditor() {
           if (next.blockIdx === blocks.length - 1) return
           next = { blockIdx: next.blockIdx + 1, row: 0 }
         }
-        if (comparePos(next, keyHold.anchor) < 0) next = keyHold.anchor
         if (comparePos(next, keyHold.end) === 0) return
         const prevEnd = keyHold.end
         keyHold.end = next
@@ -166,9 +165,16 @@ export function ChartEditor() {
           useTabsStore.temporal.getState().pause()
           keyHold.paused = true
         }
-        // При укорачивании расчищаем и хвост прежнего холда (clearEnd = prevEnd).
-        const clearEnd = comparePos(prevEnd, next) > 0 ? prevEnd : next
-        const newBlocks = placeHoldSpan(blocks, keyHold.col, keyHold.anchor, next, clearEnd)
+        // Пролёт — между якорем и подвижным концом (конец может быть и выше
+        // якоря); расчистка покрывает объединение с прежним пролётом, чтобы
+        // при укорачивании стирался остаток прежнего холда с любой стороны.
+        const minPos = (a: BlockPos, b: BlockPos) => (comparePos(a, b) <= 0 ? a : b)
+        const maxPos = (a: BlockPos, b: BlockPos) => (comparePos(a, b) >= 0 ? a : b)
+        const start = minPos(keyHold.anchor, next)
+        const end = maxPos(keyHold.anchor, next)
+        const newBlocks = placeHoldSpan(
+          blocks, keyHold.col, start, end, maxPos(end, prevEnd), minPos(start, prevEnd),
+        )
         useTabsStore.getState().updateChart(st.tab.id, { ...st.tab.chart, blocks: sanitizeHoldFlags(newBlocks) })
         return
       }
