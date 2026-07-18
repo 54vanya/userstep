@@ -33,20 +33,17 @@ function activeTabState(): { tab: Tab; cols: number } | null {
   return { tab, cols: chartCols(tab.chart) }
 }
 
-// Live-запись при воспроизведении. Две раскладки (View → Live input keys):
-// ucs (StepEdit Lite) — физически повторяет крест панели: 1P — Z Q S E C
+// Клавиши-колонки для ввода нот. Обе раскладки активны одновременно (коды не
+// пересекаются, настройка не нужна):
+// UCS Lite (StepEdit Lite) — физически повторяет крест панели: 1P — Z Q S E C
 //   (колонки 0–4), 2P — NumPad 1 7 5 9 3 (5–9), именно цифровым блоком;
-// stepmania — верхний ряд цифр 1…9, 0 → колонки 0–9 слева направо.
+// StepMania — верхний ряд цифр 1…9, 0 → колонки 0–9 слева направо.
 // По e.code — не зависит от раскладки ОС.
-const LIVE_KEY_LAYOUTS: Record<string, Record<string, number>> = {
-  ucs: {
-    KeyZ: 0, KeyQ: 1, KeyS: 2, KeyE: 3, KeyC: 4,
-    Numpad1: 5, Numpad7: 6, Numpad5: 7, Numpad9: 8, Numpad3: 9,
-  },
-  stepmania: {
-    Digit1: 0, Digit2: 1, Digit3: 2, Digit4: 3, Digit5: 4,
-    Digit6: 5, Digit7: 6, Digit8: 7, Digit9: 8, Digit0: 9,
-  },
+const LIVE_KEYS: Record<string, number> = {
+  KeyZ: 0, KeyQ: 1, KeyS: 2, KeyE: 3, KeyC: 4,
+  Numpad1: 5, Numpad7: 6, Numpad5: 7, Numpad9: 8, Numpad3: 9,
+  Digit1: 0, Digit2: 1, Digit3: 2, Digit4: 3, Digit5: 4,
+  Digit6: 5, Digit7: 6, Digit8: 7, Digit9: 8, Digit0: 9,
 }
 
 export function ChartEditor() {
@@ -104,10 +101,9 @@ export function ChartEditor() {
       // строку (квантование на линию сплита бесплатно — row дискретен),
       // существующая нота замещается. На паузе: клавиша работает как клик по
       // строке под курсором — пустая ячейка получает tap, занятая очищается.
-      const liveKeys = LIVE_KEY_LAYOUTS[ed.liveKeyLayout]
       if (!inInput && !e.repeat && !e.altKey
-          && !e.ctrlKey && !e.metaKey && liveKeys[e.code] !== undefined) {
-        const col = liveKeys[e.code]
+          && !e.ctrlKey && !e.metaKey && LIVE_KEYS[e.code] !== undefined) {
+        const col = LIVE_KEYS[e.code]
         const st = activeTabState()
         if (!st || col >= st.cols) return
         e.preventDefault()

@@ -65,6 +65,12 @@ test('клавиша на паузе ставит и убирает ноту в 
   await page.keyboard.press('s') // повторное нажатие — тогл, ячейка очищается
   notes = await getNotes(page)
   expect(notes).toHaveLength(0)
+
+  // Обе раскладки активны одновременно: цифра 4 (StepMania) → колонка 3.
+  await page.keyboard.press('4')
+  notes = await getNotes(page)
+  expect(notes).toHaveLength(1)
+  expect(notes[0]).toMatchObject({ row: 0, col: 3, type: 'tap' })
 })
 
 test('зажатая клавиша + стрелки рисуют холд от якоря', async ({ page }) => {

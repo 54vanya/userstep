@@ -107,7 +107,6 @@ export function MenuBar() {
     showFps, setShowFps,
     showNoteCounter, setShowNoteCounter,
     railColoring, setRailColoring,
-    liveKeyLayout, setLiveKeyLayout,
     playbackMode, setPlaybackMode,
     playbackFpsCap, setPlaybackFpsCap,
     fieldAlign, setFieldAlign,
@@ -163,10 +162,6 @@ export function MenuBar() {
         <SectionLabel>Skin</SectionLabel>
         <Radio on={activeSkin === 'basic'} onSelect={() => setActiveSkin('basic')}>Basic</Radio>
         <Radio on={activeSkin === 'blocks'} onSelect={() => setActiveSkin('blocks')}>Blocks</Radio>
-        <Separator />
-        <SectionLabel>Live input keys</SectionLabel>
-        <Radio on={liveKeyLayout === 'ucs'} onSelect={() => setLiveKeyLayout('ucs')}>UCS Lite (Z Q S E C + NumPad)</Radio>
-        <Radio on={liveKeyLayout === 'stepmania'} onSelect={() => setLiveKeyLayout('stepmania')}>StepMania (1 2 … 9 0)</Radio>
         <Separator />
         <SectionLabel>Playback</SectionLabel>
         <Radio on={playbackMode === 'snap'} onSelect={() => setPlaybackMode('snap')}>Pixel-snap (grid)</Radio>
