@@ -87,11 +87,11 @@ function ImageSprite({ note, rh, cw, totalRows, skin, ghost, color }: { note: No
   // стрелки, чтобы рельсы «выходили из хвостика», а не торчали сбоку/выше него.
   // У continued-частей цепочки головы нет — тело идёт от верха блока.
   const bodyTop = note.continued ? note.row * rh : note.row * rh + cw / 2
-  // КОРОТКИЙ холд (длина < cw, клетки головы и кэпа перекрываются): обычный кэп
-  // с впечатанными рельсами лез бы рельсами на стрелку головы, а его края
-  // торчали бы шумом из-за соседних нот. Берём кэп-«чистую стрелку»
-  // (Hold-BottomCapArrow, рельсы срезаны по силуэту) — рельсы под ним дают
-  // заглушка и тело, а лесенка z по строкам укладывает его ПОВЕРХ головы.
+  // КОРОТКИЙ холд (длина < cw, клетки головы и кэпа перекрываются): лесенка z
+  // кладёт кэп ПОВЕРХ головы, а в арт обычного кэпа впечатаны белые полосы
+  // рельс — они ложились бы на стрелку головы «телом поверх стрелки». Поэтому
+  // кэпом служит чистая стрелка-тап (в ритм-режиме она перекрашена синим и
+  // отличима от голов); рельсы под ней дают заглушка и тело.
   const shortCap = !note.continues && !note.continued && (endRow - note.row) * rh < cw
   // Хвостовой кэп центрирован на линии хвоста (endRow*rh), как нота на хит-линии.
   // Тело тянется до ВЕРХНЕЙ грани обычного кэпа (endRow*rh - cw/2) — иначе оно
@@ -102,7 +102,7 @@ function ImageSprite({ note, rh, cw, totalRows, skin, ghost, color }: { note: No
   // серых подложках и перекрашиваются единым синим тем же приёмом, что и голова: слой
   // цвета с mix-blend-mode:color по маске спрайта — тон одинаков на всех колонках.
   const bodySrc = rhythmBase(skin, dir, color, 'Hold-Body')
-  const capSrc = rhythmBase(skin, dir, color, shortCap ? 'Hold-BottomCapArrow' : 'Hold-BottomCap')
+  const capSrc = rhythmBase(skin, dir, color, shortCap ? 'Tap-Note' : 'Hold-BottomCap')
   const stubSrc = rhythmBase(skin, dir, color, 'Hold-HeadStub')
   const bodyStyle: React.CSSProperties = {
     backgroundImage: `url(${bodySrc})`,
