@@ -8,6 +8,7 @@ import { useEditorStore } from '@/store/editorStore'
 import { audioEngine } from './audioEngine'
 import { parseUcs } from './ucsParser'
 import { serializeToUcs } from './ucsSerializer'
+import { serializeToSm } from './smSerializer'
 import { isValidChart } from '@/utils/chartGuard'
 
 export function downloadFile(name: string, content: string, mime: string): void {
@@ -129,6 +130,13 @@ export function exportActiveUcs(): void {
   const tab = tabs.find(t => t.id === activeTabId)
   if (!tab) return
   downloadFile(`${tab.label}.ucs`, serializeToUcs(tab.chart), 'text/plain')
+}
+
+export function exportActiveSm(): void {
+  const { tabs, activeTabId } = useTabsStore.getState()
+  const tab = tabs.find(t => t.id === activeTabId)
+  if (!tab) return
+  downloadFile(`${tab.label}.sm`, serializeToSm(tab.chart), 'text/plain')
 }
 
 export function saveActivePiu(): void {

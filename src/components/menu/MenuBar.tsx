@@ -5,6 +5,7 @@ import {
   importUcsViaDialog,
   openPiuViaDialog,
   exportActiveUcs,
+  exportActiveSm,
   saveActivePiu,
 } from '@/services/fileActions'
 import { ShortcutsModal } from './ShortcutsModal'
@@ -137,6 +138,7 @@ export function MenuBar() {
         <Item onClick={openPiuViaDialog}>Open .piu.json…</Item>
         <Separator />
         <Item onClick={exportActiveUcs} disabled={!activeTab}>Export .ucs</Item>
+        <Item onClick={exportActiveSm} disabled={!activeTab}>Export .sm (StepMania)</Item>
         <Item onClick={saveActivePiu} disabled={!activeTab}>Save .piu.json</Item>
         <Separator />
         <Item onClick={() => setShowChartInfo(true)} disabled={!activeTab || activeTab.isBlank}>Chart info…</Item>

@@ -13,7 +13,7 @@ PWA: vite-plugin-pwa (Workbox), ручное обновление через `us
 ## Ключевые решения
 
 - **Язык UI — английский**: все строки интерфейса, тултипы, справка (ShortcutsModal). Русский — только в комментариях кода и внутренней документации
-- **Форматы**: `.piu.json` (внутренний, + `editorSettings`: scale/rush/позиция) + импорт/экспорт `.ucs`
+- **Форматы**: `.piu.json` (внутренний, + `editorSettings`: scale/rush/позиция) + импорт/экспорт `.ucs` + экспорт `.sm` (StepMania: pump-single/double, таймлайн в битах точными дробями, BPM блоков → `#BPMS`, Delay первого блока → `#OFFSET`, остальных → `#DELAYS` — у них семантика UCS Delay в отличие от `#STOPS`; кросс-блочный холд → одна пара 2…3; такт = 4×LCM знаменателей позиций, свыше 192 строк — квантование на 48/бит)
 - **UCS**: ноты — `.`=пусто `X`=tap `M`=hold-start `H`=hold-body `W`=hold-end; блоки разделены заголовками `:BPM=` / `:Delay=` / `:Beat=` / `:Split=`. Заголовки валидируются при парсинге (мусор/0 → дефолты, BPM=120, Beat/Split=4); Delay — дробные мс (`parseFloat`)
 - **Кросс-блочные холды**: один холд через границу блоков — цепочка нот с флагами `continues`/`continued`; вся логика цепочек — в `utils/holds.ts` (`collectHoldChain`, `sanitizeHoldFlags`). Холд без `W` тянется сквозь хвостовые `.` и пустые блоки (гиммики CS241)
 - **Курсор**: фиксирован у верха вьюпорта (`CURSOR_LINE_Y = 40`, умножается на fieldZoom), чарт движется под ним
@@ -67,6 +67,7 @@ src/
 ├── services/
 │   ├── ucsParser.ts          — .ucs → Chart (валидация заголовков, carryOver холдов)
 │   ├── ucsSerializer.ts      — Chart → .ucs / .piu.json
+│   ├── smSerializer.ts       — Chart → .sm (StepMania), экспорт-only
 │   ├── audioEngine.ts        — singleton Web Audio (play/pause/getCurrentMs/scheduleBeep)
 │   ├── fileActions.ts        — импорт/экспорт/открытие файлов, таб-операции (меню+шорткаты)
 │   ├── selectionOps.ts       — delete/copy/cut/paste/flip выделения, клипборд
@@ -107,7 +108,7 @@ src/
 
 ## Тесты
 
-- Юнит (vitest, `pnpm test`): `ucsParser`, `selectionOps`, `blockOps` — `src/**/__tests__/`
+- Юнит (vitest, `pnpm test`): `ucsParser`, `smSerializer`, `selectionOps`, `blockOps` — `src/**/__tests__/`
 - E2E (Playwright, `pnpm e2e`): `e2e/*.spec.ts` — редактор, шорткаты, блок-операции, ввод нот
 - Примеры UCS для тестов: `fileExamples/` — CS266, CS349, а также гиммик-чарты CS241 (дробный BPM, Split=128, холды сквозь пустые блоки), CS355, CS677 (+ mp3)
 
