@@ -102,12 +102,24 @@ function ImageSprite({ note, rh, cw, totalRows, skin, ghost, color }: { note: No
     backgroundSize: `${cw}px auto`,
     backgroundRepeat: 'repeat-y',
   }
+  // Короткий холд (длина < cw): клетки головы и кэпа перекрываются, и рельсы,
+  // впечатанные в верх кэпа, торчали бы ВЫШЕ хвостика стрелки-головы (а рельсы
+  // заглушки — ниже кэпа). Стыкуем их по границе: заглушка видна до верха кэпа,
+  // кэп — от этой границы; граница не поднимается выше линии головы, так что
+  // выше хвостика ничего не рисуется.
+  const capTop = endRow * rh - cw / 2
+  const boundary = note.continued ? capTop : Math.max(capTop, note.row * rh)
+  const stubClipBottom = Math.max(0, note.row * rh + cw / 2 - boundary)
+  const capClipTop = Math.max(0, boundary - capTop)
   return (
     <>
       {!note.continued && (
         <div
           className="absolute pointer-events-none"
-          style={{ left: x, top: note.row * rh, width: cw, height: cw, transform: 'translateY(-50%)', opacity, isolation: 'isolate' }}
+          style={{
+            left: x, top: note.row * rh, width: cw, height: cw, transform: 'translateY(-50%)', opacity, isolation: 'isolate',
+            clipPath: !note.continues && stubClipBottom > 0 ? `inset(0 0 ${stubClipBottom}px 0)` : undefined,
+          }}
         >
           <img src={stubSrc} draggable={false} className="block w-full h-full" />
           {color && (
@@ -157,7 +169,10 @@ function ImageSprite({ note, rh, cw, totalRows, skin, ghost, color }: { note: No
       {!note.continues && (
         <div
           className="absolute pointer-events-none"
-          style={{ left: x, top: endRow * rh, width: cw, height: cw, transform: 'translateY(-50%)', opacity, isolation: 'isolate' }}
+          style={{
+            left: x, top: endRow * rh, width: cw, height: cw, transform: 'translateY(-50%)', opacity, isolation: 'isolate',
+            clipPath: capClipTop > 0 ? `inset(${capClipTop}px 0 0 0)` : undefined,
+          }}
         >
           <img src={capSrc} draggable={false} className="block w-full h-full" />
           {color && (
