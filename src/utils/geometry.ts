@@ -2,6 +2,9 @@ import type { Block } from '@/types/chart'
 
 export const COLUMN_WIDTH = 40
 export const BASE_BEAT_HEIGHT = 32
+// Пределы per-tab Scale (расстояние между строками, слайдер в сайдбаре).
+export const MIN_SCALE = 1
+export const MAX_SCALE = 20
 export const BLOCK_DIVIDER_HEIGHT = 0
 export const CURSOR_LINE_Y = 40
 export const LABEL_WIDTH = 64

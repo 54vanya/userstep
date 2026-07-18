@@ -7,6 +7,7 @@ import { saveSession, loadSession } from '@/services/sessionStorage'
 import { useEditorStore } from '@/store/editorStore'
 import { audioEngine } from '@/services/audioEngine'
 import { tabTimes } from '@/utils/tabTime'
+import { MAX_SCALE, MIN_SCALE } from '@/utils/geometry'
 
 // Своп позиции воспроизведения при смене активной вкладки: сохраняем время
 // уходящей вкладки, грузим время входящей, останавливаем playback (аудио разное).
@@ -171,7 +172,7 @@ export const useTabsStore = create<TabsState>()(
               isDirty: true,
               isBlank: false,
               ...(settings?.scale !== undefined
-                ? { scale: Math.min(15, Math.max(1, settings.scale)) }
+                ? { scale: Math.min(MAX_SCALE, Math.max(MIN_SCALE, settings.scale)) }
                 : {}),
               ...(settings?.playbackRate !== undefined
                 ? { playbackRate: Math.round(Math.min(4, Math.max(0.2, settings.playbackRate)) * 100) / 100 }
@@ -204,7 +205,7 @@ export const useTabsStore = create<TabsState>()(
       },
 
       setTabScale: (tabId, scale) => {
-        const clamped = Math.min(15, Math.max(1, scale))
+        const clamped = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale))
         set(state => ({
           tabs: state.tabs.map(t => t.id === tabId ? { ...t, scale: clamped } : t),
         }))

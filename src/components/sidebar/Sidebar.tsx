@@ -5,7 +5,7 @@ import { useTabsStore } from '@/store/tabsStore'
 import { useEditorStore } from '@/store/editorStore'
 import { useAudio } from '@/hooks/useAudio'
 import { computeBlockOffsets, formatMs } from '@/utils/timing'
-import { blockRowCount } from '@/utils/geometry'
+import { blockRowCount, MAX_SCALE, MIN_SCALE } from '@/utils/geometry'
 import { computeHitTimes, countPassed } from '@/utils/noteCount'
 import { FIELD_ZOOM_MIN, FIELD_ZOOM_MAX, FIELD_ZOOM_STEP } from '@/utils/viewSettings'
 
@@ -182,8 +182,8 @@ export function Sidebar() {
         <SliderRow label="Scale" value={scale.toFixed(1)}>
           <input
             type="range"
-            min={1}
-            max={15}
+            min={MIN_SCALE}
+            max={MAX_SCALE}
             step={0.1}
             value={scale}
             onChange={e => activeTabId && setTabScale(activeTabId, parseFloat(e.target.value))}
