@@ -179,32 +179,6 @@ export function Sidebar() {
       </div>
 
       <div className="px-3 py-2.5 space-y-2.5 border-b border-border">
-        <SliderRow label="Scale" value={scale.toFixed(1)}>
-          <input
-            type="range"
-            min={MIN_SCALE}
-            max={MAX_SCALE}
-            step={0.1}
-            value={scale}
-            onChange={e => activeTabId && setTabScale(activeTabId, parseFloat(e.target.value))}
-            onMouseUp={e => e.currentTarget.blur()}
-            className="w-full accent-primary"
-          />
-        </SliderRow>
-
-        <SliderRow label="Zoom" value={`${fieldZoom}%`}>
-          <input
-            type="range"
-            min={FIELD_ZOOM_MIN}
-            max={FIELD_ZOOM_MAX}
-            step={FIELD_ZOOM_STEP}
-            value={fieldZoom}
-            onChange={e => setFieldZoom(parseInt(e.target.value, 10))}
-            onMouseUp={e => e.currentTarget.blur()}
-            className="w-full accent-primary"
-          />
-        </SliderRow>
-
         <SliderRow
           label="Rush"
           value={`×${playbackRate.toFixed(1)}`}
@@ -236,6 +210,32 @@ export function Sidebar() {
               if (activeTabId) setTabPlaybackRate(activeTabId, rate)
               audioEngine.setPlaybackRate(rate)
             }}
+            onMouseUp={e => e.currentTarget.blur()}
+            className="w-full accent-primary"
+          />
+        </SliderRow>
+
+        <SliderRow label="Scale" value={scale.toFixed(1)}>
+          <input
+            type="range"
+            min={MIN_SCALE}
+            max={MAX_SCALE}
+            step={0.1}
+            value={scale}
+            onChange={e => activeTabId && setTabScale(activeTabId, parseFloat(e.target.value))}
+            onMouseUp={e => e.currentTarget.blur()}
+            className="w-full accent-primary"
+          />
+        </SliderRow>
+
+        <SliderRow label="Zoom" value={`${fieldZoom}%`}>
+          <input
+            type="range"
+            min={FIELD_ZOOM_MIN}
+            max={FIELD_ZOOM_MAX}
+            step={FIELD_ZOOM_STEP}
+            value={fieldZoom}
+            onChange={e => setFieldZoom(parseInt(e.target.value, 10))}
             onMouseUp={e => e.currentTarget.blur()}
             className="w-full accent-primary"
           />
