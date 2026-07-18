@@ -80,6 +80,30 @@ const result = await page.evaluate(async ({ DIRS, BASE, ALPHA }) => {
     }
     ctx.putImageData(im, 0, 0)
     out[`rhythm/${d}-Hold-HeadStub.png`] = c.toDataURL('image/png')
+
+    // Кэп без впечатанных рельс (для коротких холдов, где клетки головы и кэпа
+    // перекрываются и кэп рисуется ПОВЕРХ головы): маскируем кэп альфой стрелки
+    // тапа — остаётся только сама стрелка, рельсы за её силуэтом отбрасываются.
+    const cap = await load(`/skin/basic/${d}-Hold-BottomCap.png`)
+    const cc = document.createElement('canvas'); cc.width = S; cc.height = S
+    const cctx = cc.getContext('2d')
+    cctx.drawImage(cap, 0, 0, S, S)
+    const cim = cctx.getImageData(0, 0, S, S)
+    for (let i = 0; i < cim.data.length; i += 4) {
+      if (a[i + 3] < ALPHA) cim.data[i + 3] = 0
+    }
+    cctx.putImageData(cim, 0, 0)
+    out[`${d}-Hold-BottomCapArrow.png`] = cc.toDataURL('image/png')
+
+    const Lb2 = luma(...BASE[d])
+    for (let i = 0; i < cim.data.length; i += 4) {
+      const L = luma(cim.data[i], cim.data[i + 1], cim.data[i + 2])
+      const v = L <= Lb2 ? (120 * L) / Lb2 : 120 + (135 * (L - Lb2)) / (255 - Lb2)
+      const g = Math.round(v)
+      cim.data[i] = cim.data[i + 1] = cim.data[i + 2] = g
+    }
+    cctx.putImageData(cim, 0, 0)
+    out[`rhythm/${d}-Hold-BottomCapArrow.png`] = cc.toDataURL('image/png')
   }
   return out
 }, { DIRS, BASE, ALPHA })

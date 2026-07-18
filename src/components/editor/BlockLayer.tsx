@@ -77,7 +77,7 @@ function ImageSprite({ note, rh, cw, totalRows, skin, ghost, color }: { note: No
 
   if (note.type === 'tap') {
     return (
-      <ArrowSprite src={tapSrc} x={x} top={note.row * rh} cw={cw} opacity={opacity} color={color} lumFilter={lumFilter} />
+      <ArrowSprite src={tapSrc} x={x} top={note.row * rh} cw={cw} opacity={opacity} color={color} z={1 + note.row} lumFilter={lumFilter} />
     )
   }
 
@@ -87,39 +87,34 @@ function ImageSprite({ note, rh, cw, totalRows, skin, ghost, color }: { note: No
   // стрелки, чтобы рельсы «выходили из хвостика», а не торчали сбоку/выше него.
   // У continued-частей цепочки головы нет — тело идёт от верха блока.
   const bodyTop = note.continued ? note.row * rh : note.row * rh + cw / 2
+  // КОРОТКИЙ холд (длина < cw, клетки головы и кэпа перекрываются): обычный кэп
+  // с впечатанными рельсами лез бы рельсами на стрелку головы, а его края
+  // торчали бы шумом из-за соседних нот. Берём кэп-«чистую стрелку»
+  // (Hold-BottomCapArrow, рельсы срезаны по силуэту) — рельсы под ним дают
+  // заглушка и тело, а лесенка z по строкам укладывает его ПОВЕРХ головы.
+  const shortCap = !note.continues && !note.continued && (endRow - note.row) * rh < cw
   // Хвостовой кэп центрирован на линии хвоста (endRow*rh), как нота на хит-линии.
-  // Тело тянется до ВЕРХНЕЙ грани кэпа (endRow*rh - cw/2), иначе оно просвечивало бы
-  // сквозь полупрозрачную верхнюю часть кэпа.
-  const bodyBot = note.continues ? totalRows * rh : endRow * rh - cw / 2
+  // Тело тянется до ВЕРХНЕЙ грани обычного кэпа (endRow*rh - cw/2) — иначе оно
+  // просвечивало бы сквозь полупрозрачный верх; у короткого кэпа рельс нет —
+  // тело идёт до самой линии хвоста, закрывая просвет между заглушкой и стрелкой.
+  const bodyBot = note.continues ? totalRows * rh : endRow * rh - (shortCap ? 0 : cw / 2)
   // При ритм-окраске (color задан) тело, заглушка и кэп рисуются на нормализованных
   // серых подложках и перекрашиваются единым синим тем же приёмом, что и голова: слой
   // цвета с mix-blend-mode:color по маске спрайта — тон одинаков на всех колонках.
   const bodySrc = rhythmBase(skin, dir, color, 'Hold-Body')
-  const capSrc = rhythmBase(skin, dir, color, 'Hold-BottomCap')
+  const capSrc = rhythmBase(skin, dir, color, shortCap ? 'Hold-BottomCapArrow' : 'Hold-BottomCap')
   const stubSrc = rhythmBase(skin, dir, color, 'Hold-HeadStub')
   const bodyStyle: React.CSSProperties = {
     backgroundImage: `url(${bodySrc})`,
     backgroundSize: `${cw}px auto`,
     backgroundRepeat: 'repeat-y',
   }
-  // Короткий холд (длина < cw): клетки головы и кэпа перекрываются, и рельсы,
-  // впечатанные в верх кэпа, торчали бы ВЫШЕ хвостика стрелки-головы (а рельсы
-  // заглушки — ниже кэпа). Стыкуем их по границе: заглушка видна до верха кэпа,
-  // кэп — от этой границы; граница не поднимается выше линии головы, так что
-  // выше хвостика ничего не рисуется.
-  const capTop = endRow * rh - cw / 2
-  const boundary = note.continued ? capTop : Math.max(capTop, note.row * rh)
-  const stubClipBottom = Math.max(0, note.row * rh + cw / 2 - boundary)
-  const capClipTop = Math.max(0, boundary - capTop)
   return (
     <>
       {!note.continued && (
         <div
           className="absolute pointer-events-none"
-          style={{
-            left: x, top: note.row * rh, width: cw, height: cw, transform: 'translateY(-50%)', opacity, isolation: 'isolate',
-            clipPath: !note.continues && stubClipBottom > 0 ? `inset(0 0 ${stubClipBottom}px 0)` : undefined,
-          }}
+          style={{ left: x, top: note.row * rh, width: cw, height: cw, transform: 'translateY(-50%)', opacity, isolation: 'isolate' }}
         >
           <img src={stubSrc} draggable={false} className="block w-full h-full" />
           {color && (
@@ -171,7 +166,7 @@ function ImageSprite({ note, rh, cw, totalRows, skin, ghost, color }: { note: No
           className="absolute pointer-events-none"
           style={{
             left: x, top: endRow * rh, width: cw, height: cw, transform: 'translateY(-50%)', opacity, isolation: 'isolate',
-            clipPath: capClipTop > 0 ? `inset(${capClipTop}px 0 0 0)` : undefined,
+            zIndex: 1 + endRow,
           }}
         >
           <img src={capSrc} draggable={false} className="block w-full h-full" />
@@ -193,7 +188,7 @@ function ImageSprite({ note, rh, cw, totalRows, skin, ghost, color }: { note: No
         </div>
       )}
       {!note.continued && (
-        <ArrowSprite src={tapSrc} x={x} top={note.row * rh} cw={cw} opacity={opacity} color={color} z={1} lumFilter={lumFilter} />
+        <ArrowSprite src={tapSrc} x={x} top={note.row * rh} cw={cw} opacity={opacity} color={color} z={1 + note.row} lumFilter={lumFilter} />
       )}
     </>
   )
@@ -260,7 +255,11 @@ export const BlockLayer = memo(function BlockLayer({ block, startY, rh, cw, tota
   const colorOf = (note: Note) => (rhythmColoring ? rhythmColor(note.row, block.split) : undefined)
 
   return (
-    <div className="absolute left-0" style={{ top: startY, width: notesWidth, height }}>
+    // zIndex:0 создаёт stacking context: «лесенка» z спрайтов по строкам (стрелка
+    // нижней строки поверх верхней, как перекрывающиеся ноты в игре) не выходит
+    // за пределы блока и не конкурирует с курсором/оверлеями; сами блоки при
+    // равном z=0 укладываются в DOM-порядке — низ следующего блока поверх.
+    <div className="absolute left-0" style={{ top: startY, width: notesWidth, height, zIndex: 0 }}>
       {block.notes.map((note, i) =>
         isBlocks
           ? <BlocksSprite key={i} note={note} rh={rh} cw={cw} totalRows={totalRows} color={colorOf(note)} />
