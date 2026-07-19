@@ -1,9 +1,21 @@
 import { useCallback, useRef, useEffect, useMemo, useState } from 'react'
+import { useStore } from 'zustand'
+import {
+  Undo2, Redo2, BoxSelect, Trash2,
+  Copy, Scissors, ClipboardPaste,
+  FlipHorizontal2, FlipVertical2, RotateCw,
+} from 'lucide-react'
 import { audioEngine } from '@/services/audioEngine'
 import { togglePlayback } from '@/services/playbackControl'
 import { useTabsStore } from '@/store/tabsStore'
 import { useEditorStore } from '@/store/editorStore'
 import { useAudio } from '@/hooks/useAudio'
+import {
+  undoEdit, redoEdit, selectBlockAtCursor,
+  copySel, cutSel, pasteSel, deleteSel, flipSel,
+} from '@/services/editActions'
+import { hasClipboard } from '@/services/selectionOps'
+import { shortcutLabel } from '@/utils/shortcuts'
 import { computeBlockOffsets, formatMs } from '@/utils/timing'
 import { blockRowCount, MAX_SCALE, MIN_SCALE } from '@/utils/geometry'
 import { computeHitTimes, countPassed } from '@/utils/noteCount'
@@ -69,6 +81,89 @@ function NoteCountDisplay({ hitTimes }: { hitTimes: number[] }) {
     <span className="text-xs font-mono text-muted-foreground tabular-nums whitespace-nowrap shrink-0" title="Notes passed / total">
       ♪ <span ref={ref} className="inline-block text-right" style={{ minWidth: `${passedWidthCh}ch` }} /> / {total}
     </span>
+  )
+}
+
+// Кнопка-иконка раздела Edit: та же стилистика, что у кнопки сброса Rush.
+function EditButton({
+  title,
+  onClick,
+  disabled,
+  children,
+}: {
+  title: string
+  onClick: (e: React.MouseEvent) => void
+  disabled?: boolean
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className="h-7 flex-1 flex items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-muted-foreground transition-colors"
+    >
+      {children}
+    </button>
+  )
+}
+
+// Раздел Edit: undo/redo и операции над выделением, ранее доступные только с
+// клавиатуры. Кнопки зовут те же editActions, что и шорткаты.
+function EditSection({ hasTab }: { hasTab: boolean }) {
+  const selection = useEditorStore(s => s.selection)
+  // Счётчик копирований — единственный реактивный сигнал о содержимом клипборда:
+  // подписка даёт ре-рендер после copy/cut, сам флаг читается свежим вызовом.
+  useEditorStore(s => s.clipVersion)
+  const canUndo = useStore(useTabsStore.temporal, s => s.pastStates.length > 0)
+  const canRedo = useStore(useTabsStore.temporal, s => s.futureStates.length > 0)
+  const hasSel = hasTab && selection !== null
+  const canPaste = hasTab && hasClipboard()
+
+  const icon = 14
+  return (
+    <div className="px-3 py-2 border-b border-border">
+      <div className="flex gap-0.5">
+        <EditButton title={`Undo (${shortcutLabel('Ctrl+Z')})`} onClick={undoEdit} disabled={!canUndo}>
+          <Undo2 size={icon} />
+        </EditButton>
+        <EditButton title={`Redo (${shortcutLabel('Ctrl+Y')})`} onClick={redoEdit} disabled={!canRedo}>
+          <Redo2 size={icon} />
+        </EditButton>
+        <EditButton title={`Select block at cursor (${shortcutLabel('Ctrl+A')})`} onClick={selectBlockAtCursor} disabled={!hasTab}>
+          <BoxSelect size={icon} />
+        </EditButton>
+        <EditButton title="Delete selection (Del)" onClick={deleteSel} disabled={!hasSel}>
+          <Trash2 size={icon} />
+        </EditButton>
+      </div>
+      <div className="flex gap-0.5 mt-0.5">
+        <EditButton title={`Copy selection (${shortcutLabel('Ctrl+C')})`} onClick={() => copySel()} disabled={!hasSel}>
+          <Copy size={icon} />
+        </EditButton>
+        <EditButton title={`Cut selection (${shortcutLabel('Ctrl+X')})`} onClick={cutSel} disabled={!hasSel}>
+          <Scissors size={icon} />
+        </EditButton>
+        <EditButton
+          title={`Paste at selection or cursor (${shortcutLabel('Ctrl+V')}); Shift+click — shift columns (${shortcutLabel('Ctrl+Shift+V')})`}
+          onClick={e => pasteSel(e.shiftKey)}
+          disabled={!canPaste}
+        >
+          <ClipboardPaste size={icon} />
+        </EditButton>
+      </div>
+      <div className="flex gap-0.5 mt-0.5">
+        <EditButton title="Flip horizontal (X)" onClick={() => flipSel('h')} disabled={!hasSel}>
+          <FlipHorizontal2 size={icon} />
+        </EditButton>
+        <EditButton title="Flip vertical (Y)" onClick={() => flipSel('v')} disabled={!hasSel}>
+          <FlipVertical2 size={icon} />
+        </EditButton>
+        <EditButton title="Mirror — flip both (M)" onClick={() => flipSel('m')} disabled={!hasSel}>
+          <RotateCw size={icon} />
+        </EditButton>
+      </div>
+    </div>
   )
 }
 
@@ -177,6 +272,8 @@ export function Sidebar() {
           <NoteCountDisplay hitTimes={hitTimes} />
         </div>
       </div>
+
+      <EditSection hasTab={!!activeTab} />
 
       <div className="px-3 py-2.5 space-y-2.5 border-b border-border">
         <SliderRow

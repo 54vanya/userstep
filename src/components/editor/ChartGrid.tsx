@@ -15,7 +15,6 @@ import {
   snapRow,
 } from '@/utils/geometry'
 import { isTextEntry } from '@/utils/dom'
-import { FIELD_ZOOM_STEP } from '@/utils/viewSettings'
 import type { BlockLayout } from '@/utils/geometry'
 import { useChart } from '@/hooks/useChart'
 import { useEditor } from '@/hooks/useEditor'
@@ -272,17 +271,20 @@ function ChartGridInner({
     }
   }, [scrollRef, scrollOffset, cursorY, fieldOffsetX])
 
-  // Ctrl+колесо — зум поля (как в StepEdit Lite). Нужен нативный non-passive
-  // listener: React вешает onWheel пассивно, preventDefault не сработал бы и
-  // браузер зумил бы страницу целиком.
+  // Ctrl+колесо — per-tab Scale (расстояние между строками; setTabScale клампит
+  // в MIN..MAX, позицию сохраняет пропорциональный пересчёт scrollTop ниже).
+  // Нужен нативный non-passive listener: React вешает onWheel пассивно,
+  // preventDefault не сработал бы и браузер зумил бы страницу целиком.
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
     const onWheel = (e: WheelEvent) => {
       if (!e.ctrlKey && !e.metaKey) return
       e.preventDefault()
-      const { fieldZoom: z, setFieldZoom } = useEditorStore.getState()
-      setFieldZoom(z + (e.deltaY < 0 ? FIELD_ZOOM_STEP : -FIELD_ZOOM_STEP))
+      const { tabs, activeTabId, setTabScale } = useTabsStore.getState()
+      const tab = tabs.find(t => t.id === activeTabId)
+      if (!tab) return
+      setTabScale(tab.id, tab.scale + (e.deltaY < 0 ? 0.5 : -0.5))
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
@@ -422,16 +424,18 @@ function ChartGridInner({
     [showNoteCounter, blocks],
   )
 
+  const { onPointerDown, onPointerMove, onPointerUp, onPointerCancel, refreshSelectionDrag, preview, tapPreview } =
+    useEditor(blockLayouts, activeTabId, cols, cw, toChartPoint)
+
   // Ручной скролл/скраб → синхронизируем currentTime. Во время playback вертикальный
   // скролл заблокирован (overflowY:hidden), так что сюда долетают только ручные
   // скроллы на паузе; isPlaying-гард — страховка от остаточных событий.
+  // Скролл колесом во время Shift+drag дотягивает выделение за пределы вьюпорта.
   const handleScroll = (newScrollTop: number) => {
     if (isPlaying) return
     setCurrentTime(scrollYToMs(newScrollTop, blockOffsets, blockLayouts))
+    refreshSelectionDrag()
   }
-
-  const { onPointerDown, onPointerMove, onPointerUp, onPointerCancel, preview, tapPreview } =
-    useEditor(blockLayouts, activeTabId, cols, cw, toChartPoint)
 
   // Превью растягивающегося холда (синтетическая нота на каждый затронутый блок,
   // включая кросс-блочные части) и/или Alt+drag серии тапов. Не зависит от scroll.

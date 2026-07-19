@@ -17,21 +17,16 @@ import {
   cycleTabs,
 } from '@/services/fileActions'
 import {
-  deleteSelection,
-  copySelection,
-  pasteClipboard,
-  flipSelection,
-} from '@/services/selectionOps'
-import type { Tab } from '@/types/chart'
-import { chartCols } from '@/types/chart'
-
-// Активная вкладка + число колонок; null-safe обёртка для клавиатурных операций.
-function activeTabState(): { tab: Tab; cols: number } | null {
-  const { tabs, activeTabId } = useTabsStore.getState()
-  const tab = tabs.find(t => t.id === activeTabId)
-  if (!tab) return null
-  return { tab, cols: chartCols(tab.chart) }
-}
+  activeTabState,
+  undoEdit,
+  redoEdit,
+  selectBlockAtCursor,
+  copySel,
+  cutSel,
+  pasteSel,
+  deleteSel,
+  flipSel,
+} from '@/services/editActions'
 
 // Клавиши-колонки для ввода нот. Обе раскладки активны одновременно (коды не
 // пересекаются, настройка не нужна):
@@ -194,27 +189,16 @@ export function ChartEditor() {
 
       // Операции над выделением без модификаторов: Delete/Backspace — удалить,
       // X / Y / M — flip horizontal / vertical / mirror (как в StepEdit Lite).
-      if (!mod && !e.altKey && !inInput) {
-        const sel = ed.selection
-        if (sel) {
-          if (e.code === 'Delete' || e.code === 'Backspace') {
-            e.preventDefault()
-            const st = activeTabState()
-            if (!st) return
-            const next = deleteSelection(st.tab.chart, sel)
-            if (next) useTabsStore.getState().updateChart(st.tab.id, next)
-            ed.setSelection(null)
-            return
-          }
-          if (e.code === 'KeyX' || e.code === 'KeyY' || e.code === 'KeyM') {
-            e.preventDefault()
-            const st = activeTabState()
-            if (!st) return
-            const flipMode = e.code === 'KeyX' ? 'h' : e.code === 'KeyY' ? 'v' : 'm'
-            const next = flipSelection(st.tab.chart, sel, flipMode, st.cols)
-            if (next) useTabsStore.getState().updateChart(st.tab.id, next)
-            return
-          }
+      if (!mod && !e.altKey && !inInput && ed.selection) {
+        if (e.code === 'Delete' || e.code === 'Backspace') {
+          e.preventDefault()
+          deleteSel()
+          return
+        }
+        if (e.code === 'KeyX' || e.code === 'KeyY' || e.code === 'KeyM') {
+          e.preventDefault()
+          flipSel(e.code === 'KeyX' ? 'h' : e.code === 'KeyY' ? 'v' : 'm')
+          return
         }
       }
 
@@ -223,12 +207,12 @@ export function ChartEditor() {
       switch (e.code) {
         case 'KeyZ':
           e.preventDefault()
-          if (e.shiftKey) useTabsStore.temporal.getState().redo()
-          else useTabsStore.temporal.getState().undo()
+          if (e.shiftKey) redoEdit()
+          else undoEdit()
           return
         case 'KeyY':
           e.preventDefault()
-          useTabsStore.temporal.getState().redo()
+          redoEdit()
           return
         case 'KeyS':
           e.preventDefault()
@@ -246,67 +230,27 @@ export function ChartEditor() {
           e.preventDefault()
           closeActiveTab()
           return
-        case 'KeyA': {
-          // Select all: выделение у нас per-block (блоки различаются split'ом),
-          // поэтому выделяем целиком блок под курсором (по currentTime).
+        case 'KeyA':
           e.preventDefault()
-          const st = activeTabState()
-          if (!st) return
-          const blocks = st.tab.chart.blocks
-          const pos = blockRowAtMs(blocks, ed.currentTime)
-          if (!pos) return
-          ed.setSelection({
-            kind: 'rows',
-            blockId: blocks[pos.blockIdx].id,
-            fromRow: 0,
-            toRow: blockRowCount(blocks[pos.blockIdx]) - 1,
-          })
+          selectBlockAtCursor()
           return
-        }
-        case 'KeyC': {
+        case 'KeyC':
           // Копируем только при активном выделении (иначе не мешаем системному
           // Ctrl+C, например для текста в сайдбаре).
-          const sel = ed.selection
-          if (!sel) return
+          if (!ed.selection) return
           e.preventDefault()
-          const st = activeTabState()
-          if (st) copySelection(st.tab.chart, sel)
+          copySel()
           return
-        }
-        case 'KeyX': {
-          // Cut = copy + delete.
-          const sel = ed.selection
-          if (!sel) return
+        case 'KeyX':
+          if (!ed.selection) return
           e.preventDefault()
-          const st = activeTabState()
-          if (!st || !copySelection(st.tab.chart, sel)) return
-          const next = deleteSelection(st.tab.chart, sel)
-          if (next) useTabsStore.getState().updateChart(st.tab.id, next)
-          ed.setSelection(null)
+          cutSel()
           return
-        }
-        case 'KeyV': {
-          // Вставка: в начало выделения, иначе — от строки под плейхедом.
+        case 'KeyV':
           // Shift — вставка со сдвигом колонок (+1 за нажатие, с заворотом).
           e.preventDefault()
-          const st = activeTabState()
-          if (!st) return
-          const blocks = st.tab.chart.blocks
-          const sel = ed.selection
-          let target: { blockIdx: number; row: number } | null = null
-          if (sel) {
-            const bi = blocks.findIndex(b => b.id === sel.blockId)
-            if (bi >= 0) target = { blockIdx: bi, row: sel.kind === 'rows' ? sel.fromRow : 0 }
-          }
-          if (!target) target = blockRowAtMs(blocks, ed.currentTime)
-          if (!target) return
-          const res = pasteClipboard(st.tab.chart, st.cols, target, e.shiftKey)
-          if (res) {
-            useTabsStore.getState().updateChart(st.tab.id, res.chart)
-            ed.setSelection(res.selection)
-          }
+          pasteSel(e.shiftKey)
           return
-        }
       }
     }
 

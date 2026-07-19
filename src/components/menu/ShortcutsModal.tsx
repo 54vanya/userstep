@@ -1,4 +1,5 @@
 import { useEffect, type ReactNode } from 'react'
+import { isMac, shortcutLabel } from '@/utils/shortcuts'
 
 // Модалка-справка по горячим клавишам (контент зеркалит docs/KEYBOARD.md).
 // Вызывается из MenuBar: File → Keyboard shortcuts.
@@ -12,20 +13,28 @@ function Kbd({ children }: { children: ReactNode }) {
 }
 
 // «Ctrl+S» → <Kbd>Ctrl</Kbd>+<Kbd>S</Kbd>; « / » разделяет альтернативы.
+// На macOS Ctrl-комбо сворачивается в один чип с символами Apple: <Kbd>⇧⌘V</Kbd>.
 function Keys({ spec }: { spec: string }) {
   return (
     <span className="whitespace-nowrap">
-      {spec.split(' / ').map((alt, i) => (
-        <span key={i}>
-          {i > 0 && <span className="text-muted-foreground mx-1">/</span>}
-          {alt.split('+').map((k, j) => (
-            <span key={j}>
-              {j > 0 && <span className="text-muted-foreground">+</span>}
-              <Kbd>{k}</Kbd>
-            </span>
-          ))}
-        </span>
-      ))}
+      {spec.split(' / ').map((alt, i) => {
+        const mac = shortcutLabel(alt)
+        return (
+          <span key={i}>
+            {i > 0 && <span className="text-muted-foreground mx-1">/</span>}
+            {mac !== alt ? (
+              <Kbd>{mac}</Kbd>
+            ) : (
+              alt.split('+').map((k, j) => (
+                <span key={j}>
+                  {j > 0 && <span className="text-muted-foreground">+</span>}
+                  <Kbd>{k}</Kbd>
+                </span>
+              ))
+            )}
+          </span>
+        )
+      })}
     </span>
   )
 }
@@ -53,7 +62,7 @@ const SECTIONS: Section[] = [
       ['Ctrl+W', 'Close tab (confirms if unsaved)'],
       ['Ctrl+Tab / Ctrl+Shift+Tab', 'Next / previous tab'],
     ],
-    note: 'In a browser tab Ctrl+N/W/Tab are reserved by the browser — they fully work in the installed PWA. Files can simply be dropped onto the window (.ucs, .piu.json, audio).',
+    note: `In a browser tab ${isMac ? '⌘N/W and Ctrl+Tab' : 'Ctrl+N/W/Tab'} are reserved by the browser — they fully work in the installed PWA. Files can simply be dropped onto the window (.ucs, .piu.json, audio).`,
   },
   {
     title: 'Undo / redo',
@@ -68,7 +77,7 @@ const SECTIONS: Section[] = [
       ['↑ / ↓', 'One row (grid of the block under the cursor)'],
       ['PgUp / PgDn', 'One page'],
       ['Home / End', 'Start / end of the chart'],
-      ['Ctrl+wheel', 'Field zoom'],
+      ['Ctrl+wheel', 'Scale (row spacing)'],
     ],
     note: 'Navigation is disabled during playback.',
   },
@@ -86,7 +95,7 @@ const SECTIONS: Section[] = [
     title: 'Selection operations',
     rows: [
       ['Delete / Backspace', 'Delete notes in the range; block selection — delete the block'],
-      ['Ctrl+C / Ctrl+X / Ctrl+V', 'Copy / cut / paste (at selection start, or at the playhead)'],
+      ['Ctrl+C / Ctrl+X / Ctrl+V', 'Copy / cut / paste (at selection start if any, else at the playhead; copy/cut clear the selection)'],
       ['Ctrl+Shift+V', 'Paste with column shift (+1 per press, wraps around)'],
       ['X', 'Flip horizontal (mirror columns)'],
       ['Y', 'Flip vertical (reverse rows)'],

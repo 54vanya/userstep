@@ -14,6 +14,9 @@ interface EditorStore {
   isPlaying: boolean
   currentTime: number
   selection: Selection | null
+  // Счётчик копирований во внутренний клипборд (selectionOps): сам клипборд —
+  // модульная переменная, счётчик даёт кнопке Paste в сайдбаре реактивность.
+  clipVersion: number
   showColumnDividers: boolean
   showRowLines: boolean
   activeSkin: string
@@ -33,6 +36,7 @@ interface EditorStore {
   setPlaying: (playing: boolean) => void
   setCurrentTime: (ms: number) => void
   setSelection: (sel: Selection | null) => void
+  bumpClipVersion: () => void
   setShowColumnDividers: (show: boolean) => void
   setShowRowLines: (show: boolean) => void
   setActiveSkin: (skin: string) => void
@@ -56,6 +60,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   isPlaying: false,
   currentTime: 0,
   selection: null,
+  clipVersion: 0,
   showColumnDividers: _view.showColumnDividers,
   showRowLines: _view.showRowLines,
   activeSkin: _view.activeSkin,
@@ -75,6 +80,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   setPlaying: (isPlaying) => set({ isPlaying }),
   setCurrentTime: (currentTime) => set({ currentTime }),
   setSelection: (selection) => set({ selection }),
+  bumpClipVersion: () => set(s => ({ clipVersion: s.clipVersion + 1 })),
   setShowColumnDividers: (showColumnDividers) => { set({ showColumnDividers }); persistView(get) },
   setShowRowLines: (showRowLines) => { set({ showRowLines }); persistView(get) },
   setActiveSkin: (activeSkin) => { set({ activeSkin }); persistView(get) },

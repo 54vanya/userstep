@@ -53,7 +53,9 @@ export function useEditor(
   const [preview, setPreview] = useState<HoldPreview | null>(null)
   // Якорь Shift+drag выделения: строка, от которой тянется диапазон (в пределах
   // одного блока — выделение у нас per-block, как per-range у StepEdit Lite).
-  const selAnchorRef = useRef<{ blockId: string; row: number } | null>(null)
+  // lastClient — последняя позиция мыши: по ней выделение пере-снэпится после
+  // скролла колесом во время drag'а (диапазон растёт за пределы вьюпорта).
+  const selAnchorRef = useRef<{ blockId: string; row: number; lastClient: { x: number; y: number } } | null>(null)
   // Alt+drag серия тапов: копится в ref, в стейт кладётся снимок для предпросмотра,
   // коммит одним updateChart на pointerup (один undo-снэпшот).
   const tapSeriesRef = useRef<TapSeries | null>(null)
@@ -104,7 +106,7 @@ export function useEditor(
       } else {
         setSelection({ kind: 'rows', blockId, fromRow: snap.row, toRow: snap.row })
       }
-      selAnchorRef.current = { blockId, row: snap.row }
+      selAnchorRef.current = { blockId, row: snap.row, lastClient: { x: e.clientX, y: e.clientY } }
       ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
       e.preventDefault()
       return
@@ -153,6 +155,35 @@ export function useEditor(
     e.preventDefault()
   }, [hitTest, toChartPoint, blockLayouts, cols, cw, snapshotTapPreview])
 
+  // Растягивание выделения к строке под точкой (clientX/Y), зажатое в блок
+  // якоря (кросс-блочного выделения нет — у блоков разные split). Общий путь
+  // для pointermove и пере-снэпа после скролла колесом.
+  const updateSelectionDrag = useCallback((clientX: number, clientY: number) => {
+    const anchor = selAnchorRef.current
+    if (!anchor) return
+    anchor.lastClient = { x: clientX, y: clientY }
+    const pt = toChartPoint(clientX, clientY)
+    if (!pt) return
+    const layout = blockLayouts.find(l => l.block.id === anchor.blockId)
+    if (!layout) return
+    const rel = Math.round((pt.py - layout.startY) / layout.rh)
+    const row = Math.min(layout.totalRows - 1, Math.max(0, rel))
+    useEditorStore.getState().setSelection({
+      kind: 'rows',
+      blockId: anchor.blockId,
+      fromRow: Math.min(anchor.row, row),
+      toRow: Math.max(anchor.row, row),
+    })
+  }, [blockLayouts, toChartPoint])
+
+  // Скролл во время Shift+drag (колесо/клавиатура): контент уехал под мышью —
+  // пере-снэпим конец диапазона по последней позиции курсора, чтобы выделение
+  // росло за пределы вьюпорта. Вне drag'а — no-op.
+  const refreshSelectionDrag = useCallback(() => {
+    const anchor = selAnchorRef.current
+    if (anchor) updateSelectionDrag(anchor.lastClient.x, anchor.lastClient.y)
+  }, [updateSelectionDrag])
+
   const onPointerMove = useCallback((e: React.PointerEvent) => {
     // Серия тапов: добавляем каждую строку между прошлой и текущей позицией
     // (быстрая мышь перескакивает строки — интерполируем внутри блока).
@@ -177,22 +208,9 @@ export function useEditor(
       return
     }
 
-    // Растягивание выделения: диапазон между якорем и текущей строкой, зажатый
-    // в блок якоря (кросс-блочного выделения нет — у блоков разные split).
-    const anchor = selAnchorRef.current
-    if (anchor) {
-      const pt = toChartPoint(e.clientX, e.clientY)
-      if (!pt) return
-      const layout = blockLayouts.find(l => l.block.id === anchor.blockId)
-      if (!layout) return
-      const rel = Math.round((pt.py - layout.startY) / layout.rh)
-      const row = Math.min(layout.totalRows - 1, Math.max(0, rel))
-      useEditorStore.getState().setSelection({
-        kind: 'rows',
-        blockId: anchor.blockId,
-        fromRow: Math.min(anchor.row, row),
-        toRow: Math.max(anchor.row, row),
-      })
+    // Растягивание выделения — общим путём с пере-снэпом после скролла.
+    if (selAnchorRef.current) {
+      updateSelectionDrag(e.clientX, e.clientY)
       return
     }
 
@@ -233,7 +251,7 @@ export function useEditor(
     } else {
       setPreview(null)
     }
-  }, [blockLayouts, toChartPoint, snapshotTapPreview])
+  }, [blockLayouts, toChartPoint, snapshotTapPreview, updateSelectionDrag])
 
   // Коммит серии тапов одним updateChart: существующие ноты в закрашенных
   // ячейках колонки замещаются, задетые холды удаляются (их части в этом блоке).
@@ -331,5 +349,5 @@ export function useEditor(
     setPreview(null)
   }, [])
 
-  return { onPointerDown, onPointerMove, onPointerUp, onPointerCancel, preview, tapPreview }
+  return { onPointerDown, onPointerMove, onPointerUp, onPointerCancel, refreshSelectionDrag, preview, tapPreview }
 }
