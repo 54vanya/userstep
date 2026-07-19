@@ -36,7 +36,12 @@ export function loadSession(): PersistedSession | null {
     if (!Array.isArray(parsed?.tabs)) return null
     // Битый таб в сессии (например, сохранённый до валидации импорта) ронял бы
     // приложение при каждом запуске — отбрасываем только его, не всю сессию.
-    const tabs = parsed.tabs.filter(t => t && typeof t.id === 'string' && isValidChart(t.chart))
+    // Rush клампится: сессия могла быть сохранена при старом диапазоне (до 4×).
+    const tabs = parsed.tabs
+      .filter(t => t && typeof t.id === 'string' && isValidChart(t.chart))
+      .map(t => typeof t.playbackRate === 'number'
+        ? { ...t, playbackRate: Math.min(2, Math.max(0.2, t.playbackRate)) }
+        : t)
     const activeTabId = tabs.some(t => t.id === parsed.activeTabId)
       ? parsed.activeTabId
       : tabs[0]?.id ?? null

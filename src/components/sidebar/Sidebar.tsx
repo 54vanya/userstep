@@ -299,7 +299,7 @@ export function Sidebar() {
           <input
             type="range"
             min={0.2}
-            max={4}
+            max={2}
             step={0.1}
             value={playbackRate}
             onChange={e => {

@@ -51,7 +51,7 @@ const SECTIONS: Section[] = [
     rows: [
       ['Space', 'Play / pause'],
     ],
-    note: 'Works everywhere except when a text field is focused. Rush 0.2×–4× — slider in the left sidebar.',
+    note: 'Works everywhere except when a text field is focused. Rush 0.2×–2× — slider in the left sidebar.',
   },
   {
     title: 'Files & tabs',
