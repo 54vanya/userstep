@@ -6,7 +6,7 @@
 
 export const SPRITE_DIRECTIONS = ['DownLeft', 'UpLeft', 'Center', 'UpRight', 'DownRight'] as const
 
-const SPRITE_PARTS = ['Tap-Note', 'Hold-Body', 'Hold-BottomCap', 'Hold-HeadStub'] as const
+const SPRITE_PARTS = ['Tap-Note', 'Hold-Body', 'Hold-BottomCap', 'Hold-BottomCapArrow', 'Hold-HeadStub'] as const
 
 const preloaded: HTMLImageElement[] = []
 

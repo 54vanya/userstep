@@ -96,6 +96,15 @@ function ImageSprite({ note, rh, cw, totalRows, skin, ghost, color }: { note: No
   const bodySrc = rhythmBase(skin, dir, color, 'Hold-Body')
   const capSrc = rhythmBase(skin, dir, color, 'Hold-BottomCap')
   const stubSrc = rhythmBase(skin, dir, color, 'Hold-HeadStub')
+  // У короткого холда клетка кэпа залезает в клетку головы, и впечатанные в арт
+  // кэпа рельсы торчали бы сбоку/выше стрелки. Выше bodyTop рельсы рисует только
+  // заглушка (обрезана по контуру стрелки) — верх кэпа срезаем до этой линии.
+  // Срез задевает и верх самой стрелки кэпа, поэтому поверх кладётся её целый
+  // арт без рельс (Hold-BottomCapArrow, рельсы срезаны по силуэту) — рельсы
+  // остаются ПОЗАДИ стрелки кэпа, а голова по-прежнему перекрывает всё.
+  const capTop = endRow * rh - cw / 2
+  const capClip = Math.max(0, bodyTop - capTop)
+  const capArrowSrc = rhythmBase(skin, dir, color, 'Hold-BottomCapArrow')
   const bodyStyle: React.CSSProperties = {
     backgroundImage: `url(${bodySrc})`,
     backgroundSize: `${cw}px auto`,
@@ -154,33 +163,68 @@ function ImageSprite({ note, rh, cw, totalRows, skin, ghost, color }: { note: No
         )}
       </div>
       {!note.continues && (
-        <div
-          className="absolute pointer-events-none"
-          // Кэп идёт ПОД головой своего холда (z = 1 + row головы, DOM-порядок: кэп
-          // раньше головы): при коротком холде, когда клетки перекрываются, впечатанные
-          // в арт кэпа рельсы уходят под стрелку головы, а не ложатся поверх неё.
-          style={{
-            left: x, top: endRow * rh, width: cw, height: cw, transform: 'translateY(-50%)', opacity, isolation: 'isolate',
-            zIndex: 1 + note.row,
-          }}
-        >
-          <img src={capSrc} draggable={false} className="block w-full h-full" />
-          {color && (
+        <>
+          <div
+            className="absolute pointer-events-none"
+            // Кэп идёт ПОД головой своего холда (z = 1 + row головы, DOM-порядок: кэп
+            // раньше головы): при коротком холде, когда клетки перекрываются, впечатанные
+            // в арт кэпа рельсы уходят под стрелку головы, а не ложатся поверх неё.
+            style={{
+              left: x, top: endRow * rh, width: cw, height: cw, transform: 'translateY(-50%)', opacity, isolation: 'isolate',
+              zIndex: 1 + note.row,
+              clipPath: capClip > 0 ? `inset(${capClip}px 0 0 0)` : undefined,
+            }}
+          >
+            <img src={capSrc} draggable={false} className="block w-full h-full" />
+            {color && (
+              <div
+                className="absolute inset-0"
+                style={{
+                  backgroundColor: RHYTHM_HOLD_BLUE,
+                  mixBlendMode: 'color',
+                  WebkitMaskImage: `url(${capSrc})`,
+                  maskImage: `url(${capSrc})`,
+                  WebkitMaskSize: '100% 100%',
+                  maskSize: '100% 100%',
+                  WebkitMaskRepeat: 'no-repeat',
+                  maskRepeat: 'no-repeat',
+                }}
+              />
+            )}
+          </div>
+          {capClip > 0 && (
             <div
-              className="absolute inset-0"
+              className="absolute pointer-events-none"
+              // Стрелка кэпа без рельс ТОЛЬКО в срезанной зоне (обратный inset):
+              // срез убрал её верх вместе с рельсами, а рельсы должны оставаться
+              // позади стрелки. Ниже линии среза арт рисует основной слой кэпа —
+              // без обратного среза полупрозрачные участки арта рисовались бы
+              // дважды и плотнели, а граница читалась бы контуром.
               style={{
-                backgroundColor: RHYTHM_HOLD_BLUE,
-                mixBlendMode: 'color',
-                WebkitMaskImage: `url(${capSrc})`,
-                maskImage: `url(${capSrc})`,
-                WebkitMaskSize: '100% 100%',
-                maskSize: '100% 100%',
-                WebkitMaskRepeat: 'no-repeat',
-                maskRepeat: 'no-repeat',
+                left: x, top: endRow * rh, width: cw, height: cw, transform: 'translateY(-50%)', opacity, isolation: 'isolate',
+                zIndex: 1 + note.row,
+                clipPath: `inset(0 0 ${cw - capClip}px 0)`,
               }}
-            />
+            >
+              <img src={capArrowSrc} draggable={false} className="block w-full h-full" />
+              {color && (
+                <div
+                  className="absolute inset-0"
+                  style={{
+                    backgroundColor: RHYTHM_HOLD_BLUE,
+                    mixBlendMode: 'color',
+                    WebkitMaskImage: `url(${capArrowSrc})`,
+                    maskImage: `url(${capArrowSrc})`,
+                    WebkitMaskSize: '100% 100%',
+                    maskSize: '100% 100%',
+                    WebkitMaskRepeat: 'no-repeat',
+                    maskRepeat: 'no-repeat',
+                  }}
+                />
+              )}
+            </div>
           )}
-        </div>
+        </>
       )}
       {!note.continued && (
         <ArrowSprite src={tapSrc} x={x} top={note.row * rh} cw={cw} opacity={opacity} color={color} z={1 + note.row} lumFilter={lumFilter} />
