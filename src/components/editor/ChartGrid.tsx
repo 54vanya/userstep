@@ -363,8 +363,17 @@ function ChartGridInner({
 
   const handleMouseMove = (e: React.MouseEvent) => {
     const hl = highlightRef.current
+    if (!hl) return
+    // Во время playback ховер не обновляем: поле летит под курсором (подсветка/статус
+    // всё равно мгновенно устаревают), а главное — каждое обновление подсветки
+    // инвалидировало бы тайлы слоя нот, что на плотных чартах при малом scale
+    // (тысячи blend-спрайтов в тайле) роняет FPS при простом движении мыши.
+    if (isPlayingRef.current) {
+      if (hl.style.display !== 'none') handleMouseLeave()
+      return
+    }
     const pt = toChartPoint(e.clientX, e.clientY)
-    if (!pt || !hl) return
+    if (!pt) return
     const col = Math.floor(pt.px / cw)
 
     // Статус-бар: ближайшая линия без мёртвых зон (snapRow), независимо от колонки.
@@ -393,8 +402,9 @@ function ChartGridInner({
     if (!hit) { hl.style.display = 'none'; return }
     const half = hitHalf(hit.layout.rh, cw)
     hl.style.display = 'block'
-    hl.style.left = `${col * cw}px`
-    hl.style.top = `${hit.lineY - half}px`
+    // Позиция — transform'ом: подсветка живёт на собственном композитном слое
+    // (willChange), её движение не перерисовывает подлежащие ноты/сетку.
+    hl.style.transform = `translate3d(${col * cw}px, ${hit.lineY - half}px, 0)`
     hl.style.width = `${cw}px`
     hl.style.height = `${half * 2}px`
   }
@@ -543,9 +553,14 @@ function ChartGridInner({
               style={{
                 display: 'none',
                 position: 'absolute',
+                left: 0,
+                top: 0,
                 width: cw,
                 pointerEvents: 'none',
                 zIndex: 2,
+                // Собственный слой: движение ховера не инвалидирует тайлы слоя нот
+                // (при малом scale в один тайл попадают тысячи спрайтов с блендингом).
+                willChange: 'transform',
               }}
             />
             {blockLayouts.map(({ block, startY, endY, rh, totalRows }) => (
