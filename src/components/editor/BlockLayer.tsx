@@ -2,9 +2,8 @@ import { memo } from 'react'
 import { useEditorStore } from '@/store/editorStore'
 import { rhythmColor, RHYTHM_YELLOW, RHYTHM_HOLD_BLUE } from '@/utils/rhythmColors'
 import { noteEnd } from '@/utils/holds'
+import { SPRITE_DIRECTIONS as DIRECTIONS } from '@/utils/spritePreload'
 import type { Block, Note } from '@/types/chart'
-
-const DIRECTIONS = ['DownLeft', 'UpLeft', 'Center', 'UpRight', 'DownRight']
 
 // Подложка для ритм-окраски (скин 'basic') — заранее сгенерированные СЕРЫЕ спрайты с
 // нормализованной яркостью «тела» (public/skin/basic/rhythm/: тапы, тела и кэпы
@@ -87,22 +86,15 @@ function ImageSprite({ note, rh, cw, totalRows, skin, ghost, color }: { note: No
   // стрелки, чтобы рельсы «выходили из хвостика», а не торчали сбоку/выше него.
   // У continued-частей цепочки головы нет — тело идёт от верха блока.
   const bodyTop = note.continued ? note.row * rh : note.row * rh + cw / 2
-  // КОРОТКИЙ холд (длина < cw, клетки головы и кэпа перекрываются): лесенка z
-  // кладёт кэп ПОВЕРХ головы, а в арт обычного кэпа впечатаны белые полосы
-  // рельс — они ложились бы на стрелку головы «телом поверх стрелки». Поэтому
-  // кэпом служит чистая стрелка-тап (в ритм-режиме она перекрашена синим и
-  // отличима от голов); рельсы под ней дают заглушка и тело.
-  const shortCap = !note.continues && !note.continued && (endRow - note.row) * rh < cw
   // Хвостовой кэп центрирован на линии хвоста (endRow*rh), как нота на хит-линии.
-  // Тело тянется до ВЕРХНЕЙ грани обычного кэпа (endRow*rh - cw/2) — иначе оно
-  // просвечивало бы сквозь полупрозрачный верх; у короткого кэпа рельс нет —
-  // тело идёт до самой линии хвоста, закрывая просвет между заглушкой и стрелкой.
-  const bodyBot = note.continues ? totalRows * rh : endRow * rh - (shortCap ? 0 : cw / 2)
+  // Тело тянется до ВЕРХНЕЙ грани кэпа (endRow*rh - cw/2) — иначе оно
+  // просвечивало бы сквозь полупрозрачный верх; дальше рельсы дорисовывает арт кэпа.
+  const bodyBot = note.continues ? totalRows * rh : endRow * rh - cw / 2
   // При ритм-окраске (color задан) тело, заглушка и кэп рисуются на нормализованных
   // серых подложках и перекрашиваются единым синим тем же приёмом, что и голова: слой
   // цвета с mix-blend-mode:color по маске спрайта — тон одинаков на всех колонках.
   const bodySrc = rhythmBase(skin, dir, color, 'Hold-Body')
-  const capSrc = rhythmBase(skin, dir, color, shortCap ? 'Tap-Note' : 'Hold-BottomCap')
+  const capSrc = rhythmBase(skin, dir, color, 'Hold-BottomCap')
   const stubSrc = rhythmBase(skin, dir, color, 'Hold-HeadStub')
   const bodyStyle: React.CSSProperties = {
     backgroundImage: `url(${bodySrc})`,
@@ -164,9 +156,12 @@ function ImageSprite({ note, rh, cw, totalRows, skin, ghost, color }: { note: No
       {!note.continues && (
         <div
           className="absolute pointer-events-none"
+          // Кэп идёт ПОД головой своего холда (z = 1 + row головы, DOM-порядок: кэп
+          // раньше головы): при коротком холде, когда клетки перекрываются, впечатанные
+          // в арт кэпа рельсы уходят под стрелку головы, а не ложатся поверх неё.
           style={{
             left: x, top: endRow * rh, width: cw, height: cw, transform: 'translateY(-50%)', opacity, isolation: 'isolate',
-            zIndex: 1 + endRow,
+            zIndex: 1 + note.row,
           }}
         >
           <img src={capSrc} draggable={false} className="block w-full h-full" />
