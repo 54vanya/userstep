@@ -275,19 +275,32 @@ function ChartGridInner({
   // в MIN..MAX, позицию сохраняет пропорциональный пересчёт scrollTop ниже).
   // Нужен нативный non-passive listener: React вешает onWheel пассивно,
   // preventDefault не сработал бы и браузер зумил бы страницу целиком.
+  // Шаги копятся и применяются раз в кадр (rAF): трекпад шлёт wheel чаще 60 Гц,
+  // без коалессинга каждый ивент дёргал бы стор и рендер по нескольку раз за кадр.
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
+    let pendingSteps = 0
+    let rafId = 0
     const onWheel = (e: WheelEvent) => {
       if (!e.ctrlKey && !e.metaKey) return
       e.preventDefault()
-      const { tabs, activeTabId, setTabScale } = useTabsStore.getState()
-      const tab = tabs.find(t => t.id === activeTabId)
-      if (!tab) return
-      setTabScale(tab.id, tab.scale + (e.deltaY < 0 ? 0.5 : -0.5))
+      pendingSteps += e.deltaY < 0 ? 0.5 : -0.5
+      if (rafId) return
+      rafId = requestAnimationFrame(() => {
+        rafId = 0
+        const steps = pendingSteps
+        pendingSteps = 0
+        const { tabs, activeTabId, setTabScale } = useTabsStore.getState()
+        const tab = tabs.find(t => t.id === activeTabId)
+        if (tab) setTabScale(tab.id, tab.scale + steps)
+      })
     }
     el.addEventListener('wheel', onWheel, { passive: false })
-    return () => el.removeEventListener('wheel', onWheel)
+    return () => {
+      el.removeEventListener('wheel', onWheel)
+      if (rafId) cancelAnimationFrame(rafId)
+    }
   }, [scrollRef])
 
   // Клавиатурная навигация (как в StepEdit Lite): ↑/↓ — строка, PgUp/PgDn —
@@ -349,6 +362,10 @@ function ChartGridInner({
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [scrollRef])
 
+  // Пересчёт scrollTop при смене scale. Чтение el.scrollTop здесь форсирует
+  // reflow, но он НЕ лишний: запись scrollTop сама флашит layout (кламп по
+  // scrollHeight), и это тот же recalc стилей, что всё равно нужен кадру перед
+  // paint'ом — выносить базу в ref смысла нет, профиль это подтвердил.
   const prevScaleRef = useRef(scale)
   useLayoutEffect(() => {
     const prevScale = prevScaleRef.current
@@ -568,17 +585,40 @@ function ChartGridInner({
               }}
             />
             {blockLayouts.map(({ block, startY, endY, rh, totalRows }) => (
-              <BlockLayer
+              // Обёртка задаёт позицию блока и var(--rh) — все вертикальные
+              // координаты спрайтов внутри считаются calc'ами от неё, поэтому
+              // смена scale НЕ ре-рендерит BlockLayer (memo-хит: его пропы от
+              // scale не зависят), браузер лишь пересчитывает стили.
+              // zIndex:0 создаёт stacking context: «лесенка» z спрайтов по строкам
+              // (стрелка нижней строки поверх верхней, как перекрывающиеся ноты в
+              // игре) не выходит за пределы блока и не конкурирует с курсором/
+              // оверлеями; сами блоки при равном z=0 укладываются в DOM-порядке.
+              // content-visibility:auto — оффскрин-блоки не участвуют в пересчёте
+              // стилей/лейауте (смена scale трогает только видимые; внутри блока
+              // та же механика на сегментах ~64 нот — см. BlockLayer.SegmentSlot,
+              // блочной гранулярности мало для чартов из одного огромного блока).
+              // Обёртка растянута на max(cw, rh)/2 — максимальный выступ спрайта
+              // за блок: ноты на крайних строках рисуются с translateY(-50%)
+              // (спрайт basic высотой cw, плашка blocks высотой rh) — иначе paint
+              // containment срезал бы эти выступы; внутренний слой возвращает
+              // систему координат блока. При playback c-v остаётся: рендер
+              // сегмента «на въезде» в вьюпорт дёшев, а прокси-margin браузера
+              // прячет его за пределами экрана.
+              <BlockSlot
                 key={block.id}
-                block={block}
                 startY={startY}
-                rh={rh}
-                cw={cw}
-                totalRows={totalRows}
                 height={endY - startY}
+                pad={Math.max(cw, rh) / 2}
+                rh={rh}
                 notesWidth={notesWidth}
-                previewNotes={previewNotesByBlock?.get(block.id) ?? null}
-              />
+              >
+                <BlockLayer
+                  block={block}
+                  cw={cw}
+                  totalRows={totalRows}
+                  previewNotes={previewNotesByBlock?.get(block.id) ?? null}
+                />
+              </BlockSlot>
             ))}
           </div>
           {selectionRect && (
@@ -641,6 +681,42 @@ function ChartGridInner({
           onClose={() => setOpenBlockId(null)}
         />
       )}
+    </div>
+  )
+}
+
+// Позиционирующая обёртка блока нот: несёт var(--rh), паддинг под выступы
+// спрайтов и content-visibility для оффскрин-блоков (детали — у места
+// использования в ChartGridInner). Внутренний слой восстанавливает координаты
+// блока, чтобы BlockLayer ничего не знал про паддинг.
+function BlockSlot({
+  startY,
+  height,
+  pad,
+  rh,
+  notesWidth,
+  children,
+}: {
+  startY: number
+  height: number
+  pad: number
+  rh: number
+  notesWidth: number
+  children: React.ReactNode
+}) {
+  return (
+    <div
+      className="absolute left-0"
+      style={{
+        top: startY - pad,
+        width: notesWidth,
+        height: height + pad * 2,
+        zIndex: 0,
+        '--rh': `${rh}px`,
+        contentVisibility: 'auto',
+      } as React.CSSProperties}
+    >
+      <div style={{ position: 'absolute', left: 0, top: pad, width: '100%', height }}>{children}</div>
     </div>
   )
 }

@@ -99,20 +99,31 @@ export function MenuBar() {
   const [showChartInfo, setShowChartInfo] = useState(false)
   const barRef = useRef<HTMLDivElement>(null)
 
-  const { tabs, activeTabId, addTab } = useTabsStore()
-  const activeTab = tabs.find(t => t.id === activeTabId)
-  const {
-    showColumnDividers, setShowColumnDividers,
-    showRowLines, setShowRowLines,
-    activeSkin, setActiveSkin,
-    showFps, setShowFps,
-    showNoteCounter, setShowNoteCounter,
-    railColoring, setRailColoring,
-    playbackMode, setPlaybackMode,
-    playbackFpsCap, setPlaybackFpsCap,
-    fieldAlign, setFieldAlign,
-    theme, setTheme,
-  } = useEditorStore()
+  // Узкие подписки (примитивы/стабильные экшены): полная подписка на оба стора
+  // ре-рендерила бы всё меню на каждый тик Scale-слайдера и скролла (currentTime).
+  const addTab = useTabsStore(s => s.addTab)
+  const hasActiveTab = useTabsStore(s => s.tabs.some(t => t.id === s.activeTabId))
+  const activeIsBlank = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId)?.isBlank ?? false)
+  const showColumnDividers = useEditorStore(s => s.showColumnDividers)
+  const setShowColumnDividers = useEditorStore(s => s.setShowColumnDividers)
+  const showRowLines = useEditorStore(s => s.showRowLines)
+  const setShowRowLines = useEditorStore(s => s.setShowRowLines)
+  const activeSkin = useEditorStore(s => s.activeSkin)
+  const setActiveSkin = useEditorStore(s => s.setActiveSkin)
+  const showFps = useEditorStore(s => s.showFps)
+  const setShowFps = useEditorStore(s => s.setShowFps)
+  const showNoteCounter = useEditorStore(s => s.showNoteCounter)
+  const setShowNoteCounter = useEditorStore(s => s.setShowNoteCounter)
+  const railColoring = useEditorStore(s => s.railColoring)
+  const setRailColoring = useEditorStore(s => s.setRailColoring)
+  const playbackMode = useEditorStore(s => s.playbackMode)
+  const setPlaybackMode = useEditorStore(s => s.setPlaybackMode)
+  const playbackFpsCap = useEditorStore(s => s.playbackFpsCap)
+  const setPlaybackFpsCap = useEditorStore(s => s.setPlaybackFpsCap)
+  const fieldAlign = useEditorStore(s => s.fieldAlign)
+  const setFieldAlign = useEditorStore(s => s.setFieldAlign)
+  const theme = useEditorStore(s => s.theme)
+  const setTheme = useEditorStore(s => s.setTheme)
 
   // Закрытие по клику вне меню / Escape.
   useEffect(() => {
@@ -137,11 +148,11 @@ export function MenuBar() {
         <Item onClick={importUcsViaDialog}>Import .ucs…</Item>
         <Item onClick={openPiuViaDialog}>Open .piu.json…</Item>
         <Separator />
-        <Item onClick={exportActiveUcs} disabled={!activeTab}>Export .ucs</Item>
-        <Item onClick={exportActiveSm} disabled={!activeTab}>Export .sm (StepMania)</Item>
-        <Item onClick={saveActivePiu} disabled={!activeTab}>Save .piu.json</Item>
+        <Item onClick={exportActiveUcs} disabled={!hasActiveTab}>Export .ucs</Item>
+        <Item onClick={exportActiveSm} disabled={!hasActiveTab}>Export .sm (StepMania)</Item>
+        <Item onClick={saveActivePiu} disabled={!hasActiveTab}>Save .piu.json</Item>
         <Separator />
-        <Item onClick={() => setShowChartInfo(true)} disabled={!activeTab || activeTab.isBlank}>Chart info…</Item>
+        <Item onClick={() => setShowChartInfo(true)} disabled={!hasActiveTab || activeIsBlank}>Chart info…</Item>
         <Separator />
         <Item onClick={() => setShowShortcuts(true)}>Keyboard shortcuts…</Item>
       </MenuButton>

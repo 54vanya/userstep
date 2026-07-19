@@ -1,4 +1,4 @@
-import { useCallback, useRef, useEffect, useMemo, useState } from 'react'
+import { memo, useCallback, useRef, useEffect, useMemo, useState } from 'react'
 import { useStore } from 'zustand'
 import {
   Undo2, Redo2, BoxSelect, Trash2,
@@ -109,8 +109,10 @@ function EditButton({
 }
 
 // Раздел Edit: undo/redo и операции над выделением, ранее доступные только с
-// клавиатуры. Кнопки зовут те же editActions, что и шорткаты.
-function EditSection({ hasTab }: { hasTab: boolean }) {
+// клавиатуры. Кнопки зовут те же editActions, что и шорткаты. memo: Sidebar
+// ре-рендерится на каждый тик Scale-слайдера, а этому разделу scale безразличен —
+// без memo десяток кнопок с иконками рендерился бы на каждый тик впустую.
+const EditSection = memo(function EditSection({ hasTab }: { hasTab: boolean }) {
   const selection = useEditorStore(s => s.selection)
   // Счётчик копирований — единственный реактивный сигнал о содержимом клипборда:
   // подписка даёт ре-рендер после copy/cut, сам флаг читается свежим вызовом.
@@ -165,7 +167,7 @@ function EditSection({ hasTab }: { hasTab: boolean }) {
       </div>
     </div>
   )
-}
+})
 
 // Строка слайдера: подпись + значение над полноширинным range-инпутом.
 function SliderRow({
@@ -192,7 +194,7 @@ function SliderRow({
 }
 
 export function Sidebar() {
-  const { tabs, activeTabId, setTabScale, setTabPlaybackRate } = useTabsStore()
+  const { tabs, activeTabId, setTabPlaybackRate } = useTabsStore()
   // По-полевые подписки: подписка на весь стор (с currentTime) ререндерила бы
   // весь сайдбар на каждый тик скролла/скраба; currentTime читается через
   // getState() в RAF-дисплеях.
@@ -208,6 +210,23 @@ export function Sidebar() {
   const musicVolume = useEditorStore(s => s.musicVolume)
   const setMusicVolume = useEditorStore(s => s.setMusicVolume)
   const activeTab = tabs.find(t => t.id === activeTabId)
+
+  // Тики слайдера Scale применяются раз в кадр (rAF), как у Ctrl+колеса:
+  // input-события могут приходить чаще кадров, а каждый setTabScale — это
+  // рендер скелета грида + пересчёт стилей. Берётся последнее значение.
+  const pendingScaleRef = useRef<number | null>(null)
+  const scaleRafRef = useRef(0)
+  const onScaleChange = useCallback((value: number) => {
+    pendingScaleRef.current = value
+    if (scaleRafRef.current) return
+    scaleRafRef.current = requestAnimationFrame(() => {
+      scaleRafRef.current = 0
+      const { activeTabId, setTabScale } = useTabsStore.getState()
+      if (activeTabId && pendingScaleRef.current !== null) setTabScale(activeTabId, pendingScaleRef.current)
+      pendingScaleRef.current = null
+    })
+  }, [])
+  useEffect(() => () => cancelAnimationFrame(scaleRafRef.current), [])
 
   const totalMs = useMemo(() => {
     if (!activeTab) return 0
@@ -319,7 +338,7 @@ export function Sidebar() {
             max={MAX_SCALE}
             step={0.1}
             value={scale}
-            onChange={e => activeTabId && setTabScale(activeTabId, parseFloat(e.target.value))}
+            onChange={e => onScaleChange(parseFloat(e.target.value))}
             onMouseUp={e => e.currentTarget.blur()}
             className="w-full accent-primary"
           />

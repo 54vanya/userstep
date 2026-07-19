@@ -11,9 +11,9 @@ import { computeHitSounds, hitSoundFreq, computeMetronomeTicks, metronomeFreq } 
 export function useHitSounds() {
   const hitSounds = useEditorStore(s => s.hitSounds)
   const isPlaying = useEditorStore(s => s.isPlaying)
-  const tabs = useTabsStore(s => s.tabs)
-  const activeTabId = useTabsStore(s => s.activeTabId)
-  const blocks = tabs.find(t => t.id === activeTabId)?.chart.blocks
+  // Селектор сразу до blocks: ссылка на chart стабильна при не-чартовых правках
+  // таба (scale/rush/isDirty) — хук не ре-рендерит ChartEditor на каждый их тик.
+  const blocks = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId)?.chart.blocks)
 
   useEffect(() => {
     if (!hitSounds || !isPlaying || !blocks) return

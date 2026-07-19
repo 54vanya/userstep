@@ -42,15 +42,19 @@ const LIVE_KEYS: Record<string, number> = {
 }
 
 export function ChartEditor() {
-  const { tabs, activeTabId } = useTabsStore()
-  const activeTab = tabs.find(t => t.id === activeTabId)
+  // Примитивные селекторы: подписка на tabs целиком ре-рендерила бы редактор
+  // (и весь грид под ним) на каждый не-чартовый тик стора (слайдер Scale и т.п.).
+  const activeTabId = useTabsStore(s => s.activeTabId)
+  const hasActiveTab = useTabsStore(s => s.tabs.some(t => t.id === s.activeTabId))
+  const activeIsBlank = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId)?.isBlank ?? false)
+  const playbackRate = useTabsStore(s => s.tabs.find(t => t.id === s.activeTabId)?.playbackRate ?? 1.0)
 
   // Озвучка нот у курсора (сам хук внутри проверяет флаг/воспроизведение).
   useHitSounds()
 
   useEffect(() => {
-    audioEngine.setPlaybackRate(activeTab?.playbackRate ?? 1.0)
-  }, [activeTabId, activeTab?.playbackRate])
+    audioEngine.setPlaybackRate(playbackRate)
+  }, [activeTabId, playbackRate])
 
   useEffect(() => {
     // Рисование холда с клавиатуры: пока клавиша-колонка зажата, ArrowDown/Up
@@ -270,7 +274,7 @@ export function ChartEditor() {
     }
   }, [])
 
-  if (!activeTab) {
+  if (!hasActiveTab || !activeTabId) {
     return (
       <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
         <div className="text-center space-y-2">
@@ -281,8 +285,8 @@ export function ChartEditor() {
     )
   }
 
-  if (activeTab.isBlank) {
-    return <WelcomeScreen tabId={activeTab.id} />
+  if (activeIsBlank) {
+    return <WelcomeScreen tabId={activeTabId} />
   }
 
   return (

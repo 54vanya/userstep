@@ -10,7 +10,9 @@ import { importUcsViaDialog, openPiuViaDialog, openDroppedFile } from '@/service
 import { usePwaUpdate } from '@/hooks/usePwaUpdate'
 
 export function App() {
-  const { tabs } = useTabsStore()
+  // Только факт наличия табов: подписка на весь стор ре-рендерила бы ВСЁ дерево
+  // приложения из корня на каждый тик слайдера Scale / markDirty и т.п.
+  const hasTabs = useTabsStore(s => s.tabs.length > 0)
   const { needRefresh, update } = usePwaUpdate()
   const showFps = useEditorStore(s => s.showFps)
 
@@ -48,7 +50,7 @@ export function App() {
         <MenuBar />
         <TabBar />
       </div>
-      {tabs.length > 0 ? (
+      {hasTabs ? (
         <div className="flex flex-1 overflow-hidden">
           <Sidebar />
           <ChartEditor />
@@ -61,7 +63,7 @@ export function App() {
 }
 
 function WelcomeScreen() {
-  const { addTab } = useTabsStore()
+  const addTab = useTabsStore(s => s.addTab)
 
   return (
     <div className="flex-1 flex items-center justify-center">
