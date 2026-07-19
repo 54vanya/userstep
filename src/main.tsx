@@ -3,9 +3,11 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import { App } from './app/App'
 import { loadTheme, applyTheme } from './utils/theme'
+import { preloadSprites } from './utils/spritePreload'
 import { openDroppedFile } from './services/fileActions'
 
 applyTheme(loadTheme())
+preloadSprites()
 
 // PWA file_handlers: файлы, открытые через ОС («Открыть с помощью…» /
 // drag&drop на иконку установленного приложения).
