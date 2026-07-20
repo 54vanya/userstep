@@ -22,7 +22,7 @@ export function usePlayback(
   scrollRef: React.RefObject<HTMLDivElement | null>,
   { contentRef, gridRef, playbackYRef }: PlaybackOptions,
 ) {
-  const { isPlaying, setPlaying, setCurrentTime, playbackMode, playbackFpsCap } = useEditorStore()
+  const { isPlaying, setPlaying, setCurrentTime, playbackMode, playbackFpsCap, audioOffsetMs } = useEditorStore()
   const rafRef = useRef<number>(0)
 
   useEffect(() => {
@@ -124,7 +124,12 @@ export function usePlayback(
         }
       }
 
-      const y = msToScrollY(predicted, offsets, blockLayouts)
+      // Компенсация задержки звукового тракта (Bluetooth-наушники и т.п.): звук
+      // из динамика физически слышен audioOffsetMs позже, чем сообщает аудио-
+      // клок, поэтому визуальную позицию сдвигаем на столько же назад — нота
+      // достигает линии курсора синхронно с реально услышанным битом, а не с
+      // «логической» позицией трека.
+      const y = msToScrollY(predicted - audioOffsetMs, offsets, blockLayouts)
       playbackYRef.current = y
       // Ноты всегда сабпиксельно (мягкие спрайты двигаются гладко).
       // Sub-pixel + GPU-композитинг, без reflow и scroll-событий.
@@ -158,5 +163,5 @@ export function usePlayback(
       // Передаём позицию нативному скроллу: его onScroll пересинхронит currentTime.
       scroller.scrollTop = y
     }
-  }, [isPlaying, playbackMode, playbackFpsCap, blocks, blockLayouts, scrollRef, contentRef, gridRef, playbackYRef])
+  }, [isPlaying, playbackMode, playbackFpsCap, audioOffsetMs, blocks, blockLayouts, scrollRef, contentRef, gridRef, playbackYRef])
 }

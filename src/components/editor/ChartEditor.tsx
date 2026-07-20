@@ -110,7 +110,11 @@ export function ChartEditor() {
         // ChartGrid пропускает INPUT-таргеты (стрелки нужны слайдерам), и с фокусом
         // на контроле стрелки жеста холда растягивали бы ноту, не двигая курсор.
         if (target instanceof HTMLElement && target.tagName === 'INPUT') target.blur()
-        const ms = ed.isPlaying ? audioEngine.getCurrentMs() : ed.currentTime
+        // При live-записи физическое нажатие клавиши приходит с задержкой звукового
+        // тракта (Bluetooth и т.п.): игрок реагирует на бит, который УЖЕ прозвучал
+        // audioOffsetMs назад, поэтому целевую строку берём из более ранней позиции
+        // трека — тот же сдвиг, что и у визуальной прокрутки в usePlayback.
+        const ms = ed.isPlaying ? audioEngine.getCurrentMs() - ed.audioOffsetMs : ed.currentTime
         const pos = blockRowAtMs(st.tab.chart.blocks, ms)
         if (!pos) return
         const block = st.tab.chart.blocks[pos.blockIdx]

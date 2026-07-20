@@ -19,7 +19,7 @@ import { shortcutLabel } from '@/utils/shortcuts'
 import { computeBlockOffsets, formatMs } from '@/utils/timing'
 import { blockRowCount, MAX_SCALE, MIN_SCALE } from '@/utils/geometry'
 import { computeHitTimes, countPassed } from '@/utils/noteCount'
-import { FIELD_ZOOM_MIN, FIELD_ZOOM_MAX, FIELD_ZOOM_STEP } from '@/utils/viewSettings'
+import { FIELD_ZOOM_MIN, FIELD_ZOOM_MAX, FIELD_ZOOM_STEP, AUDIO_OFFSET_MIN, AUDIO_OFFSET_MAX, AUDIO_OFFSET_STEP } from '@/utils/viewSettings'
 
 // Левый сайдбар — бывший тулбар: play, время, счётчик нот, слайдеры Scale/Zoom/
 // Rush/Volume, чекбоксы звукового ассиста, кнопка аудио-файла. Метаданные чарта
@@ -209,6 +209,8 @@ export function Sidebar() {
   const setMetronome = useEditorStore(s => s.setMetronome)
   const musicVolume = useEditorStore(s => s.musicVolume)
   const setMusicVolume = useEditorStore(s => s.setMusicVolume)
+  const audioOffsetMs = useEditorStore(s => s.audioOffsetMs)
+  const setAudioOffsetMs = useEditorStore(s => s.setAudioOffsetMs)
   const activeTab = tabs.find(t => t.id === activeTabId)
 
   // Тики слайдера Scale применяются раз в кадр (rAF), как у Ctrl+колеса:
@@ -368,6 +370,36 @@ export function Sidebar() {
             onMouseUp={e => e.currentTarget.blur()}
             className="w-full accent-primary"
             title="Music volume (does not affect hit sounds)"
+          />
+        </SliderRow>
+
+        <SliderRow
+          label="Audio offset"
+          value={`${audioOffsetMs >= 0 ? '+' : ''}${audioOffsetMs}ms`}
+          extra={
+            <button
+              onClick={() => setAudioOffsetMs(0)}
+              disabled={audioOffsetMs === 0}
+              title="Reset audio offset to 0ms"
+              className="w-5 h-5 flex items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+            >
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M3 8a5 5 0 1 1 1.6 3.7" strokeLinecap="round" />
+                <path d="M3 4.5 V8 H6.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          }
+        >
+          <input
+            type="range"
+            min={AUDIO_OFFSET_MIN}
+            max={AUDIO_OFFSET_MAX}
+            step={AUDIO_OFFSET_STEP}
+            value={audioOffsetMs}
+            onChange={e => setAudioOffsetMs(parseInt(e.target.value, 10))}
+            onMouseUp={e => e.currentTarget.blur()}
+            className="w-full accent-primary"
+            title="Compensate output latency (e.g. Bluetooth headphones): shifts note scroll and live keyboard input to match the sound you actually hear. Positive = audio arrives late."
           />
         </SliderRow>
       </div>

@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { loadTheme, applyTheme, type Theme } from '@/utils/theme'
-import { loadViewSettings, saveViewSettings, clampFieldZoom, type PlaybackMode, type RailColoring, type FieldAlign } from '@/utils/viewSettings'
+import { loadViewSettings, saveViewSettings, clampFieldZoom, clampAudioOffset, type PlaybackMode, type RailColoring, type FieldAlign } from '@/utils/viewSettings'
 
 // Выделение (модель StepEdit Lite, два уровня):
 // rows  — диапазон строк ОДНОГО блока, все колонки; операции фазы 3 (delete/copy/
@@ -31,6 +31,7 @@ interface EditorStore {
   hitSounds: boolean
   metronome: boolean
   musicVolume: number
+  audioOffsetMs: number
   theme: Theme
 
   setPlaying: (playing: boolean) => void
@@ -51,6 +52,7 @@ interface EditorStore {
   setHitSounds: (on: boolean) => void
   setMetronome: (on: boolean) => void
   setMusicVolume: (v: number) => void
+  setAudioOffsetMs: (ms: number) => void
   setTheme: (theme: Theme) => void
 }
 
@@ -75,6 +77,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   hitSounds: _view.hitSounds,
   metronome: _view.metronome,
   musicVolume: _view.musicVolume,
+  audioOffsetMs: _view.audioOffsetMs,
   theme: loadTheme(),
 
   setPlaying: (isPlaying) => set({ isPlaying }),
@@ -95,10 +98,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   setHitSounds: (hitSounds) => { set({ hitSounds }); persistView(get) },
   setMetronome: (metronome) => { set({ metronome }); persistView(get) },
   setMusicVolume: (musicVolume) => { set({ musicVolume }); persistView(get) },
+  setAudioOffsetMs: (ms) => { set({ audioOffsetMs: clampAudioOffset(ms) }); persistView(get) },
   setTheme: (theme) => { applyTheme(theme); set({ theme }) },
 }))
 
 function persistView(get: () => EditorStore): void {
-  const { showColumnDividers, showRowLines, activeSkin, showFps, playbackMode, playbackFpsCap, fieldZoom, fieldAlign, showNoteCounter, railColoring, rhythmColoring, hitSounds, metronome, musicVolume } = get()
-  saveViewSettings({ showColumnDividers, showRowLines, activeSkin, showFps, playbackMode, playbackFpsCap, fieldZoom, fieldAlign, showNoteCounter, railColoring, rhythmColoring, hitSounds, metronome, musicVolume })
+  const { showColumnDividers, showRowLines, activeSkin, showFps, playbackMode, playbackFpsCap, fieldZoom, fieldAlign, showNoteCounter, railColoring, rhythmColoring, hitSounds, metronome, musicVolume, audioOffsetMs } = get()
+  saveViewSettings({ showColumnDividers, showRowLines, activeSkin, showFps, playbackMode, playbackFpsCap, fieldZoom, fieldAlign, showNoteCounter, railColoring, rhythmColoring, hitSounds, metronome, musicVolume, audioOffsetMs })
 }

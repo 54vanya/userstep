@@ -60,6 +60,14 @@ export interface ViewSettings {
   hitSounds: boolean
   metronome: boolean
   musicVolume: number
+  // Компенсация задержки звукового тракта (Bluetooth-наушники и т.п.), мс.
+  // Положительное значение = звук слышен позже, чем «логическая» позиция трека:
+  // на столько же назад сдвигается прокрутка нот при playback (usePlayback) и
+  // вычисление целевой строки при live-записи с клавиатуры (ChartEditor) — оба
+  // места используют звук как источник времени, поэтому оба нуждаются в сдвиге.
+  // Хит-саунды/метроном не трогаем: они идут через тот же аудио-выход, что и
+  // музыка, и остаются синхронны с ней независимо от офсета.
+  audioOffsetMs: number
 }
 
 const DEFAULTS: ViewSettings = {
@@ -77,11 +85,21 @@ const DEFAULTS: ViewSettings = {
   hitSounds: false,
   metronome: false,
   musicVolume: 1,
+  audioOffsetMs: 0,
 }
+
+export const AUDIO_OFFSET_MIN = -500
+export const AUDIO_OFFSET_MAX = 500
+export const AUDIO_OFFSET_STEP = 5
 
 export function clampVolume(v: unknown): number {
   if (typeof v !== 'number' || !isFinite(v)) return DEFAULTS.musicVolume
   return Math.min(1, Math.max(0, v))
+}
+
+export function clampAudioOffset(v: unknown): number {
+  if (typeof v !== 'number' || !isFinite(v)) return DEFAULTS.audioOffsetMs
+  return Math.min(AUDIO_OFFSET_MAX, Math.max(AUDIO_OFFSET_MIN, Math.round(v)))
 }
 
 export function clampFieldZoom(z: unknown): number {
@@ -119,6 +137,7 @@ export function loadViewSettings(): ViewSettings {
       hitSounds: typeof parsed.hitSounds === 'boolean' ? parsed.hitSounds : DEFAULTS.hitSounds,
       metronome: typeof parsed.metronome === 'boolean' ? parsed.metronome : DEFAULTS.metronome,
       musicVolume: clampVolume(parsed.musicVolume),
+      audioOffsetMs: clampAudioOffset(parsed.audioOffsetMs),
     }
   } catch {
     return { ...DEFAULTS }
