@@ -523,6 +523,14 @@ function ChartGridInner({
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerCancel}
+        // Подстраховка от macOS-трекпада: клик-и-драг зажатым пальцем + скролл
+        // ДРУГИМИ пальцами (жест авто-скролла во время Shift+drag) иногда
+        // прерывает капчур указателя так, что ни pointerup, ни pointercancel до
+        // страницы не долетают — dragRef/selAnchorRef подвисают навсегда, и
+        // выделение перестаёт запускаться. lostpointercapture по спеке ВСЕГДА
+        // срабатывает при любом снятии капчура (включая такие обрывы) — тем же
+        // сбросом состояния, что и pointercancel, самоисцеляемся.
+        onLostPointerCapture={onPointerCancel}
       >
         <Cursor cursorY={cursorY} />
         <div style={{ height: cursorY, flexShrink: 0 }} />
