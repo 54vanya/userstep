@@ -20,6 +20,7 @@ import { computeBlockOffsets, formatMs } from '@/utils/timing'
 import { blockRowCount, MAX_SCALE, MIN_SCALE } from '@/utils/geometry'
 import { computeHitTimes, countPassed } from '@/utils/noteCount'
 import { FIELD_ZOOM_MIN, FIELD_ZOOM_MAX, FIELD_ZOOM_STEP, AUDIO_OFFSET_MIN, AUDIO_OFFSET_MAX, AUDIO_OFFSET_STEP } from '@/utils/viewSettings'
+import { AudioOffsetCalibration } from './AudioOffsetCalibration'
 
 // Левый сайдбар — бывший тулбар: play, время, счётчик нот, слайдеры Scale/Zoom/
 // Rush/Volume, чекбоксы звукового ассиста, кнопка аудио-файла. Метаданные чарта
@@ -252,6 +253,7 @@ export function Sidebar() {
   // кнопка Play на старте остаётся выключенной до случайного ре-рендера.
   // Подписываемся на событие загрузки и пере-проверяем при смене вкладки.
   const [audioReady, setAudioReady] = useState(() => audioEngine.hasAudio())
+  const [showCalibration, setShowCalibration] = useState(false)
   useEffect(() => {
     const refresh = () => setAudioReady(audioEngine.hasAudio())
     audioEngine.on('load', refresh)
@@ -401,8 +403,18 @@ export function Sidebar() {
             className="w-full accent-primary"
             title="Compensate output latency (e.g. Bluetooth headphones): shifts note scroll and live keyboard input to match the sound you actually hear. Positive = audio arrives late."
           />
+          <button
+            onClick={() => setShowCalibration(true)}
+            disabled={!activeTab || !audioReady}
+            title="Measure the offset by tapping along to this chart's own track"
+            className="mt-1 w-full px-2 py-1 rounded bg-secondary text-secondary-foreground text-xs hover:bg-accent transition-colors disabled:opacity-40 disabled:hover:bg-secondary"
+          >
+            Calibrate…
+          </button>
         </SliderRow>
       </div>
+
+      {showCalibration && <AudioOffsetCalibration onClose={() => setShowCalibration(false)} />}
 
       <div className="px-3 py-2.5 space-y-1.5 border-b border-border">
         <label
