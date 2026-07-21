@@ -201,27 +201,31 @@ export function pasteClipboard(
 export type FlipMode = 'h' | 'v' | 'm'
 
 // Панели идут пятёрками DownLeft/UpLeft/Center/UpRight/DownRight на игрока
-// (SPRITE_DIRECTIONS), Double — две пятёрки подряд. M (mirror 180°) — точечное
-// отражение диаманта: DL⇄UR, UL⇄DR, C на месте (в каждой пятёрке), а не
-// «H пополам с V» — сверено разбором эталона (StepEdit_Lite.exe): у M и H
-// разные табличные перестановки колонок, и M НЕ трогает строки вообще
-// (в отличие от того, что можно было бы подумать по названию «H+V»). Как
-// composition: сначала своя пара внутри пятёрки (DL⇄UL, DR⇄UR — «переворот
-// верх/низ»), затем зеркало по всей ширине чарта (как H) — левая колонка,
-// на которую в итоге попадает исходная, оказывается зеркальной парой.
-function mirror180Col(col: number, cols: number): number {
+// (SPRITE_DIRECTIONS), Double — две пятёрки подряд. Все три режима — чистые
+// перестановки КОЛОНОК внутри своей строки, время (row/endRow) не трогают:
+// X — зеркало лево/право на всю ширину чарта (col → cols-1-col);
+// Y — зеркало верх/низ внутри своей пятёрки: DL⇄UL, DR⇄UR, C на месте.
+// Первая версия Y делала реверс строк по времени — не совпадало ни с
+// подписью «Flip vertical»/иконкой FlipVertical2 в сайдбаре, ни с ожиданием
+// юзера (паттерн `*.*.*` на всю ширину single должен становиться `.***.` —
+// ровно результат udSwapLocal, а не палиндромный реверс);
+// M — оба сразу, 180°-поворот диаманта (DL⇄UR, UL⇄DR, C на месте) — не
+// сводится к «сделать X, потом Y» построчно во времени, отдельная перестановка
+// (сверено разбором эталона StepEdit_Lite.exe: там тоже жёсткая таблица без
+// реверса строк, X и M различаются как раз в этом).
+function udSwapLocal(col: number): number {
   const local = col % 5
   const swapped = local === 0 ? 1 : local === 1 ? 0 : local === 3 ? 4 : local === 4 ? 3 : 2
-  const udSwapped = col - local + swapped
-  return cols - 1 - udSwapped
+  return col - local + swapped
 }
 
-// X (h) — зеркало по колонкам (столбец cols-1-col), Y (v) — реверс строк
-// внутри диапазона (столбцы не трогает — см. mirror180Col выше за разбор
-// эталона, там же объяснение почему M не сводится к h+v). Трансформируются
-// только ноты целиком внутри диапазона; кросс-блочные цепочки не трогаем (их
-// не развернуть в пределах одного блока). Перевёрнутые ноты, столкнувшиеся с
-// пропущенными, отбрасываются.
+function mirror180Col(col: number, cols: number): number {
+  return cols - 1 - udSwapLocal(col)
+}
+
+// Трансформируются только ноты целиком внутри диапазона выделения;
+// кросс-блочные цепочки не трогаем (их не развернуть в пределах одного
+// блока). Перевёрнутые ноты, столкнувшиеся с пропущенными, отбрасываются.
 export function flipSelection(chart: Chart, sel: Selection, mode: FlipMode, cols: number): Chart | null {
   const idx = chart.blocks.findIndex(b => b.id === sel.blockId)
   if (idx < 0) return null
@@ -239,18 +243,10 @@ export function flipSelection(chart: Chart, sel: Selection, mode: FlipMode, cols
       kept.push(n)
       continue
     }
-    let nn: Note = { ...n }
-    if (mode === 'h') {
-      nn.col = cols - 1 - nn.col
-    } else if (mode === 'v') {
-      if (nn.type === 'hold') {
-        nn = { ...nn, row: from + to - (nn.endRow ?? nn.row), endRow: from + to - nn.row }
-      } else {
-        nn = { ...nn, row: from + to - nn.row }
-      }
-    } else {
-      nn.col = mirror180Col(nn.col, cols)
-    }
+    const nn: Note = { ...n }
+    if (mode === 'h') nn.col = cols - 1 - nn.col
+    else if (mode === 'v') nn.col = udSwapLocal(nn.col)
+    else nn.col = mirror180Col(nn.col, cols)
     moved.push(nn)
   }
   if (moved.length === 0) return null

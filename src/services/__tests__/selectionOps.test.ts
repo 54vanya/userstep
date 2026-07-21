@@ -164,11 +164,24 @@ describe('flipSelection', () => {
     expect(notes[1].col).toBe(0)
   })
 
-  it('Y реверсирует строки, холды пересчитываются', () => {
-    const b = makeBlock([{ row: 1, col: 2, type: 'hold', endRow: 3 }])
+  it('Y зеркалит верх/низ внутри пятёрки, время не трогает: `*.*.*` → `.***.`', () => {
+    const b = makeBlock([
+      { row: 3, col: 0, type: 'tap' },
+      { row: 3, col: 2, type: 'tap' },
+      { row: 3, col: 4, type: 'tap' },
+    ])
     const chart = makeChart([b])
-    const next = flipSelection(chart, { kind: 'rows', blockId: b.id, fromRow: 0, toRow: 7 }, 'v', 5)!
-    expect(next.blocks[0].notes[0]).toMatchObject({ row: 4, endRow: 6, col: 2 })
+    const next = flipSelection(chart, { kind: 'block', blockId: b.id }, 'v', 5)!
+    const cols = next.blocks[0].notes.map(n => n.col).sort((a, b2) => a - b2)
+    expect(cols).toEqual([1, 2, 3])
+    expect(next.blocks[0].notes.every(n => n.row === 3)).toBe(true)
+  })
+
+  it('Y на холде — меняет колонку, row/endRow не трогает', () => {
+    const b = makeBlock([{ row: 1, col: 0, type: 'hold', endRow: 3 }])
+    const chart = makeChart([b])
+    const next = flipSelection(chart, { kind: 'block', blockId: b.id }, 'v', 5)!
+    expect(next.blocks[0].notes[0]).toMatchObject({ row: 1, endRow: 3, col: 1 })
   })
 
   it('M — точечное отражение диаманта колонок, строки не трогает', () => {
