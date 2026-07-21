@@ -171,11 +171,34 @@ describe('flipSelection', () => {
     expect(next.blocks[0].notes[0]).toMatchObject({ row: 4, endRow: 6, col: 2 })
   })
 
-  it('M = X + Y на всём блоке', () => {
-    const b = makeBlock([{ row: 0, col: 0, type: 'tap' }])
+  it('M — точечное отражение диаманта колонок, строки не трогает', () => {
+    // DownLeft(0) ⇄ UpRight(3), UpLeft(1) ⇄ DownRight(4), Center(2) на месте —
+    // сверено с разбором эталона (StepEdit_Lite.exe): M НЕ равен X+Y.
+    const b = makeBlock([
+      { row: 5, col: 0, type: 'tap' },
+      { row: 6, col: 1, type: 'tap' },
+      { row: 7, col: 2, type: 'tap' },
+    ])
     const chart = makeChart([b])
     const next = flipSelection(chart, { kind: 'block', blockId: b.id }, 'm', 5)!
-    expect(next.blocks[0].notes[0]).toMatchObject({ row: 15, col: 4 })
+    const notes = [...next.blocks[0].notes].sort((a, b2) => a.row - b2.row)
+    expect(notes[0]).toMatchObject({ row: 5, col: 3 })
+    expect(notes[1]).toMatchObject({ row: 6, col: 4 })
+    expect(notes[2]).toMatchObject({ row: 7, col: 2 })
+  })
+
+  it('M на Double — тот же диамант в каждой из двух пятёрок + P1⇄P2', () => {
+    const b = makeBlock([
+      { row: 0, col: 0, type: 'tap' }, // P1 DownLeft
+      { row: 1, col: 4, type: 'tap' }, // P1 DownRight
+      { row: 2, col: 7, type: 'tap' }, // P2 Center
+    ])
+    const chart = makeChart([b])
+    const next = flipSelection(chart, { kind: 'block', blockId: b.id }, 'm', 10)!
+    const notes = [...next.blocks[0].notes].sort((a, b2) => a.row - b2.row)
+    expect(notes[0]).toMatchObject({ row: 0, col: 8 }) // P2 UpRight
+    expect(notes[1]).toMatchObject({ row: 1, col: 6 }) // P2 UpLeft
+    expect(notes[2]).toMatchObject({ row: 2, col: 2 }) // P1 Center
   })
 
   it('кросс-блочные холды не трогаются', () => {

@@ -200,10 +200,28 @@ export function pasteClipboard(
 
 export type FlipMode = 'h' | 'v' | 'm'
 
-// X (h) — зеркало по колонкам, Y (v) — реверс строк внутри диапазона, M — оба.
-// Трансформируются только ноты целиком внутри диапазона; кросс-блочные цепочки
-// не трогаем (их не развернуть в пределах одного блока). Перевёрнутые ноты,
-// столкнувшиеся с пропущенными, отбрасываются.
+// Панели идут пятёрками DownLeft/UpLeft/Center/UpRight/DownRight на игрока
+// (SPRITE_DIRECTIONS), Double — две пятёрки подряд. M (mirror 180°) — точечное
+// отражение диаманта: DL⇄UR, UL⇄DR, C на месте (в каждой пятёрке), а не
+// «H пополам с V» — сверено разбором эталона (StepEdit_Lite.exe): у M и H
+// разные табличные перестановки колонок, и M НЕ трогает строки вообще
+// (в отличие от того, что можно было бы подумать по названию «H+V»). Как
+// composition: сначала своя пара внутри пятёрки (DL⇄UL, DR⇄UR — «переворот
+// верх/низ»), затем зеркало по всей ширине чарта (как H) — левая колонка,
+// на которую в итоге попадает исходная, оказывается зеркальной парой.
+function mirror180Col(col: number, cols: number): number {
+  const local = col % 5
+  const swapped = local === 0 ? 1 : local === 1 ? 0 : local === 3 ? 4 : local === 4 ? 3 : 2
+  const udSwapped = col - local + swapped
+  return cols - 1 - udSwapped
+}
+
+// X (h) — зеркало по колонкам (столбец cols-1-col), Y (v) — реверс строк
+// внутри диапазона (столбцы не трогает — см. mirror180Col выше за разбор
+// эталона, там же объяснение почему M не сводится к h+v). Трансформируются
+// только ноты целиком внутри диапазона; кросс-блочные цепочки не трогаем (их
+// не развернуть в пределах одного блока). Перевёрнутые ноты, столкнувшиеся с
+// пропущенными, отбрасываются.
 export function flipSelection(chart: Chart, sel: Selection, mode: FlipMode, cols: number): Chart | null {
   const idx = chart.blocks.findIndex(b => b.id === sel.blockId)
   if (idx < 0) return null
@@ -211,8 +229,6 @@ export function flipSelection(chart: Chart, sel: Selection, mode: FlipMode, cols
   const total = blockRowCount(block)
   const from = sel.kind === 'block' ? 0 : sel.fromRow
   const to = sel.kind === 'block' ? total - 1 : sel.toRow
-  const doH = mode !== 'v'
-  const doV = mode !== 'h'
 
   const kept: Note[] = []
   const moved: Note[] = []
@@ -224,13 +240,16 @@ export function flipSelection(chart: Chart, sel: Selection, mode: FlipMode, cols
       continue
     }
     let nn: Note = { ...n }
-    if (doH) nn.col = cols - 1 - nn.col
-    if (doV) {
+    if (mode === 'h') {
+      nn.col = cols - 1 - nn.col
+    } else if (mode === 'v') {
       if (nn.type === 'hold') {
         nn = { ...nn, row: from + to - (nn.endRow ?? nn.row), endRow: from + to - nn.row }
       } else {
         nn = { ...nn, row: from + to - nn.row }
       }
+    } else {
+      nn.col = mirror180Col(nn.col, cols)
     }
     moved.push(nn)
   }
