@@ -19,37 +19,25 @@ function edgeStops(pos: number, color: string, ramp: number, width: number, minS
   return `transparent ${rampStart.toFixed(3)}px, ${color} ${(coreStart + ramp).toFixed(3)}px, ${color} ${pos.toFixed(3)}px`
 }
 
+// Раньше beat/sub рисовались через multiLine — один gradient-слой со списком
+// стопов на весь measure/beat-период, пропускающий позицию, которую кладёт
+// уровень старше (чтобы не суммировать альфу мягких краёв на одной строке,
+// см. историю). На плотных чартах (большой scale, Split=4) это давало ДРУГОЙ
+// баг: у beat-слоя период = rh*beat (напр. 682px) при ширине волоска ~1px —
+// на проде часть линий (обычно 1-2 из десятков) не прорисовывалась вовсе,
+// видимо браузер сэмплирует длинный многостоповый repeating-gradient через
+// текстуру ограниченного разрешения, и тонкий стоп между её сэмплами
+// теряется (воспроизведено и померено: часть строк без линии вообще, не
+// только банding). Вернулись к простым однострочным repeating-gradient на
+// СВОЁМ коротком периоде (rh / rh*split / rh*split*beat) для каждого уровня;
+// double-alpha на совпадающих строках убирает не skip-логика, а порядок
+// слоёв — measure/beat лежат ПЕРВЫМИ в списке (CSS: первый слой рисуется
+// поверх), их непрозрачная сердцевина перекрывает младший уровень на той же
+// строке вместо сложения альфы с ним.
 function line(period: number, color: string, dir: 'bottom' | 'right'): string {
   const ramp = Math.min(LINE_RAMP, period / 4)
   const width = Math.min(LINE_WIDTH, period / 2)
   return `repeating-linear-gradient(to ${dir}, transparent 0, ${edgeStops(period, color, ramp, width, 0)}, transparent ${period}px)`
-}
-
-// Линии МЛАДШЕГО уровня (sub внутри одного beat, beat внутри одного measure):
-// count штук на позициях unit, 2*unit, ..., count*unit, БЕЗ линии на самой
-// границе repeatWindow (=(count+1)*unit) — её кладёт уровень СТАРШЕ. Без
-// этого скипа два независимых мягких края на ОДНОЙ строке складывают альфу
-// (transparent-слой поверх transparent-слоя того же цвета не бывает 100%
-// прозрачным на границе перехода) — сумма заметно темнее соседних линий
-// того же уровня (banding воспроизведён и померен на реальном чарте:
-// расширение ramp его не лечит, потому что растёт именно площадь наложения).
-// Со скипом на каждой строке красит ровно один уровень — наложения нет в принципе.
-function multiLine(repeatWindow: number, unit: number, count: number, color: string, dir: 'bottom' | 'right'): string | null {
-  if (count <= 0) return null
-  const ramp = Math.min(LINE_RAMP, unit / 4)
-  const width = Math.min(LINE_WIDTH, unit / 2)
-  const parts: string[] = ['transparent 0']
-  let prevEnd = 0
-  for (let i = 1; i <= count; i++) {
-    const pos = unit * i
-    parts.push(edgeStops(pos, color, ramp, width, prevEnd))
-    // Закрываем линию сразу же — иначе градиент плавно "течёт" от опаки до
-    // rampStart следующей линии через весь промежуток вместо чёткого волоска.
-    parts.push(`transparent ${pos.toFixed(3)}px`)
-    prevEnd = pos
-  }
-  parts.push(`transparent ${repeatWindow}px`)
-  return `repeating-linear-gradient(to ${dir}, ${parts.join(', ')})`
 }
 
 export function buildGridBackground(block: Block, rh: number, cw: number, showCols: boolean, showRows: boolean): string {
@@ -61,10 +49,8 @@ export function buildGridBackground(block: Block, rh: number, cw: number, showCo
     const measurePeriod = rh * block.split * block.beat
     const beatPeriod = rh * block.split
     layers.push(line(measurePeriod, 'var(--color-grid-measure)', 'bottom'))
-    const beatLayer = multiLine(measurePeriod, beatPeriod, block.beat - 1, 'var(--color-grid-beat)', 'bottom')
-    if (beatLayer) layers.push(beatLayer)
-    const subLayer = multiLine(beatPeriod, rh, block.split - 1, 'var(--color-grid-sub)', 'bottom')
-    if (subLayer) layers.push(subLayer)
+    layers.push(line(beatPeriod, 'var(--color-grid-beat)', 'bottom'))
+    layers.push(line(rh, 'var(--color-grid-sub)', 'bottom'))
   }
   if (showCols) layers.push(line(cw, 'var(--color-grid-beat)', 'right'))
   return layers.length ? layers.join(', ') : 'none'
